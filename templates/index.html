@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>月足MACD ダッシュボード</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+:root {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #1c2128;
+  --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+  --blue: #58a6ff; --green: #3fb950; --red: #f85149; --orange: #f0883e;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg); color: var(--text);
+  height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+}
+
+/* ── Header ─────────────────────────────────────── */
+header {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 11px 20px; display: flex; align-items: center; gap: 14px;
+  position: sticky; top: 0; z-index: 100;
+}
+.hd-title h1 { font-size: 14px; font-weight: 700; }
+.hd-title p  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.sb-toggle-btn {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  padding: 5px 9px; border-radius: 6px; cursor: pointer; font-size: 15px;
+  flex-shrink: 0; transition: all .15s;
+}
+.sb-toggle-btn:hover { border-color: var(--blue); color: var(--text); }
+.hd-form { display: flex; gap: 8px; margin-left: auto; }
+.hd-form input {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  padding: 7px 12px; border-radius: 6px; font-size: 13px; width: 210px;
+}
+.hd-form input:focus { outline: none; border-color: var(--blue); }
+.hd-form input::placeholder { color: var(--muted); }
+.btn {
+  background: var(--blue); color: #fff; border: none;
+  padding: 7px 16px; border-radius: 6px; cursor: pointer;
+  font-size: 13px; font-weight: 600; transition: filter .15s; white-space: nowrap;
+}
+.btn:hover { filter: brightness(1.15); }
+.btn:disabled { opacity: .6; cursor: not-allowed; filter: none; }
+
+/* ── Page ────────────────────────────────────────── */
+/* ── App layout ──────────────────────────────────── */
+.app-body { display: flex; flex: 1; overflow: hidden; }
+.page { flex: 1; overflow-y: auto; padding: 16px 18px; }
+
+/* ── Signal sidebar ──────────────────────────────── */
+.signal-sidebar {
+  width: 200px; min-width: 200px; flex-shrink: 0;
+  background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+  transition: width .2s ease, min-width .2s ease;
+}
+.signal-sidebar.collapsed { width: 0; min-width: 0; }
+
+.sb-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.sb-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.sb-close {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 14px; padding: 1px 4px; transition: color .15s;
+}
+.sb-close:hover { color: var(--text); }
+
+.sb-body { flex: 1; overflow-y: auto; }
+.sb-body::-webkit-scrollbar { width: 4px; }
+.sb-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.sb-cat { border-bottom: 1px solid var(--border); }
+.sb-cat-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 12px; font-size: 11px; font-weight: 700;
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg2);
+}
+.sb-cat-hd.sig-buy     { color: #3fb950; background: #143520; }
+.sb-cat-hd.sig-sell    { color: #f85149; background: #351515; }
+.sb-cat-hd.sig-bullish { color: #56d364; background: #102819; }
+.sb-cat-hd.sig-bearish { color: #ff7b72; background: #281010; }
+.sb-cat-hd.sig-neutral { color: #8b949e; background: var(--bg2); }
+.sb-count {
+  font-size: 10px; font-weight: 700; padding: 1px 5px;
+  border-radius: 8px; background: rgba(255,255,255,.08); color: inherit;
+}
+
+.sb-item {
+  padding: 7px 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.03);
+  transition: background .12s;
+}
+.sb-item:hover { background: var(--bg3); }
+.sb-item.sb-active { background: var(--bg3); border-left: 2px solid var(--blue); padding-left: 10px; }
+
+.sb-item-name {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sb-item-sub { display: flex; justify-content: space-between; margin-top: 2px; }
+.sb-ticker-lbl { font-size: 10px; color: var(--muted); }
+.sb-price-lbl  { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sb-empty { padding: 5px 12px 7px; font-size: 11px; color: #484f58; }
+
+/* カテゴリ背景色 */
+.sbg-buy     { background: #0e2a18; }
+.sbg-sell    { background: #2a0f0f; }
+.sbg-bullish { background: #0b1f13; }
+.sbg-bearish { background: #1f0c0c; }
+.sb-item:hover { background: rgba(255,255,255,.07) !important; }
+
+/* カテゴリドラッグ */
+.sb-drag { cursor: grab; color: var(--muted); font-size: 13px; opacity: .3; flex-shrink: 0; user-select: none; }
+.sb-cat:hover .sb-drag { opacity: .7; }
+.sb-drag:active { cursor: grabbing; }
+.sb-cat-ghost { opacity: .35; outline: 1px dashed var(--blue); }
+
+/* ── Grid ────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+/* ── Card ────────────────────────────────────────── */
+.card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 13px 14px; cursor: pointer;
+  display: flex; flex-direction: column; gap: 7px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.card:hover { border-color: #444c56; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.card.active { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+.card-name {
+  font-size: 13px; font-weight: 700; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;
+}
+.card-ticker { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.rm {
+  background: none; border: none; color: #484f58; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0 3px; flex-shrink: 0;
+  transition: color .15s;
+}
+.rm:hover { color: var(--red); }
+
+.card-price  { font-size: 21px; font-weight: 300; font-variant-numeric: tabular-nums; }
+.card-change { font-size: 12px; font-variant-numeric: tabular-nums; }
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+
+.badge {
+  display: inline-block; font-size: 11px; font-weight: 700;
+  padding: 3px 9px; border-radius: 10px; white-space: nowrap; align-self: flex-start;
+}
+.sig-buy     { background: rgba(63,185,80,.25);    color: #3fb950; }
+.sig-sell    { background: rgba(248,81,73,.25);    color: #f85149; }
+.sig-bullish { background: rgba(63,185,80,.12);    color: #56d364; }
+.sig-bearish { background: rgba(248,81,73,.12);    color: #ff7b72; }
+.sig-neutral { background: rgba(139,148,158,.15);  color: #8b949e; }
+.sig-loading { background: rgba(139,148,158,.08);  color: #6e7681; }
+
+.mini-svg { width: 100%; display: block; }
+
+.card-vals {
+  display: flex; gap: 4px; font-size: 10px; color: var(--muted);
+  font-variant-numeric: tabular-nums; text-align: center;
+}
+.card-vals > div { flex: 1; background: var(--bg3); border-radius: 4px; padding: 4px 2px; }
+.card-vals strong { display: block; font-size: 11px; color: var(--text); margin-top: 1px; }
+
+/* Skeleton */
+.skel {
+  background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%);
+  background-size: 200% 100%; animation: sh 1.4s infinite; border-radius: 4px;
+}
+@keyframes sh { to { background-position: -200% 0; } }
+
+/* ── Detail Panel ────────────────────────────────── */
+.detail {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 18px 20px; margin-bottom: 16px;
+}
+.detail-hd {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.detail-left .d-name { font-size: 18px; font-weight: 700; }
+.detail-left .d-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.detail-left .d-sig  { margin-top: 10px; }
+.detail-right { text-align: right; }
+.detail-right .d-price {
+  font-size: 32px; font-weight: 300; font-variant-numeric: tabular-nums;
+}
+.detail-right .d-change { font-size: 14px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.detail-btns { display: flex; gap: 7px; align-self: flex-start; }
+.btn-sm {
+  background: var(--bg3); color: var(--muted); border: 1px solid var(--border);
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  transition: border-color .15s;
+}
+.btn-sm:hover { border-color: var(--blue); color: var(--text); }
+.btn-close {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  transition: border-color .15s, color .15s;
+}
+.btn-close:hover { border-color: var(--red); color: var(--red); }
+
+.stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 12px; }
+.stat {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 11px 13px;
+}
+.stat-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+.stat-val { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; font-family: monospace; }
+
+.chart-box {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 13px 15px; margin-bottom: 10px;
+}
+.chart-lbl { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 9px; }
+.ch-price { height: 230px; position: relative; }
+.ch-macd  { height: 165px; position: relative; }
+
+.period-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.period-lbl { font-size: 11px; color: var(--muted); margin-right: 2px; }
+.pbtn {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--muted);
+  padding: 4px 11px; border-radius: 5px; cursor: pointer; font-size: 12px;
+  transition: all .15s;
+}
+.pbtn:hover { border-color: var(--blue); color: var(--text); }
+.pbtn.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+/* ── Misc ────────────────────────────────────────── */
+.empty-grid {
+  grid-column: 1/-1; padding: 60px 20px; text-align: center; color: var(--muted);
+}
+.empty-grid .ico { font-size: 48px; margin-bottom: 12px; }
+.err-card {
+  background: var(--bg2); border: 1px solid rgba(248,81,73,.35);
+  border-radius: 10px; padding: 14px; color: #ff7b72; font-size: 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── 市場別カラー ────────────────────────────── */
+.card.mkt-jp {
+  background: linear-gradient(180deg, rgba(210,70,60,.13) 0%, rgba(210,70,60,.04) 100%);
+  border-color: rgba(210, 70, 60, .35);
+}
+.card.mkt-jp:hover:not(.active) { border-color: rgba(210, 70, 60, .60); }
+
+.card.mkt-us {
+  background: linear-gradient(180deg, rgba(55,120,230,.13) 0%, rgba(55,120,230,.04) 100%);
+  border-color: rgba(55, 120, 230, .35);
+}
+.card.mkt-us:hover:not(.active) { border-color: rgba(55, 120, 230, .60); }
+
+/* ── ドラッグ並び替え ────────────────────────── */
+.drag-handle {
+  color: var(--muted); cursor: grab; font-size: 14px;
+  padding: 0 5px 0 0; flex-shrink: 0; opacity: 0.3;
+  transition: opacity .15s; user-select: none; line-height: 1;
+}
+.card:hover .drag-handle { opacity: 0.7; }
+.drag-handle:active { cursor: grabbing; }
+.card-ghost  { opacity: 0.35; border: 1px dashed var(--blue) !important; background: var(--bg3) !important; }
+.card-chosen { box-shadow: 0 8px 24px rgba(0,0,0,.55) !important; transform: rotate(1deg); }
+
+/* ── メモ & 編集 ─────────────────────────────── */
+.card-memo { font-size:11px; color:var(--muted); line-height:1.4; margin-top:2px;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.btn-edit { background:none; border:none; color:var(--muted); cursor:pointer;
+  font-size:14px; padding:3px 5px; transition:color .15s; flex-shrink:0; }
+.btn-edit:hover { color:var(--blue); }
+.detail-memo { background:var(--bg3); border:1px solid var(--border); border-radius:8px;
+  padding:12px 14px; margin-bottom:10px; font-size:13px; color:var(--text);
+  white-space:pre-wrap; line-height:1.6; min-height:36px; }
+.detail-memo-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.detail-memo-lbl { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+/* ── モーダル ────────────────────────────────── */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.65);
+  display:flex; align-items:center; justify-content:center; z-index:9000; }
+.modal-overlay.hidden { display:none; }
+.modal-box { background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+  padding:22px 24px; width:min(420px,92vw); display:flex; flex-direction:column; gap:14px; }
+.modal-title { font-size:15px; font-weight:700; }
+.modal-lbl { font-size:12px; color:var(--muted); margin-bottom:4px; }
+.modal-input, .modal-textarea { width:100%; background:var(--bg3); border:1px solid var(--border);
+  color:var(--text); border-radius:6px; font-size:13px; padding:8px 10px; font-family:inherit; }
+.modal-input:focus, .modal-textarea:focus { outline:none; border-color:var(--blue); }
+.modal-textarea { resize:vertical; min-height:90px; }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; }
+</style>
+</head>
+<body>
+
+<header>
+  <button class="sb-toggle-btn" id="sb-toggle" onclick="toggleSidebar()" title="シグナル別リスト">☰</button>
+  <div class="hd-title">
+    <h1>📈 月足MACD ダッシュボード</h1>
+    <p>MACD (12, 26, 9) ｜ 月足 ｜ 過去3年</p>
+  </div>
+  <div class="hd-form">
+    <input id="t-input" type="text" placeholder="銘柄コード例: AAPL, 7203" autocomplete="off" />
+    <button class="btn" id="add-btn" onclick="addTicker()">＋ 追加</button>
+  </div>
+</header>
+
+<div class="modal-overlay hidden" id="edit-modal" onclick="handleModalOverlayClick(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-title" id="modal-title">銘柄を編集</div>
+    <div>
+      <div class="modal-lbl">表示名（空欄でデフォルト名を使用）</div>
+      <input class="modal-input" id="modal-name" type="text" placeholder="例: トヨタ自動車" />
+    </div>
+    <div>
+      <div class="modal-lbl">メモ</div>
+      <textarea class="modal-textarea" id="modal-memo" placeholder="メモを入力…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-close" onclick="closeModal()">キャンセル</button>
+      <button class="btn" id="modal-save-btn" onclick="saveModal()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="app-body">
+  <aside class="signal-sidebar" id="signal-sidebar">
+    <div class="sb-head">
+      <span class="sb-title">シグナル別</span>
+      <button class="sb-close" onclick="toggleSidebar()">✕</button>
+    </div>
+    <div class="sb-body" id="sb-body"></div>
+  </aside>
+  <div class="page">
+    <div class="grid" id="grid"></div>
+    <div class="detail" id="detail" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let stockData      = {};   // ticker → API data
+let order          = [];   // watchlist order
+let active         = null;
+let priceChart     = null;
+let macdChart      = null;
+let currentPeriod  = 36;   // months shown in detail charts (default 3 years)
+let detailData     = null;  // full data of currently shown stock
+let modalTicker    = null;  // ticker currently being edited in modal
+let sortableInst   = null;  // SortableJS instance
+let sidebarOpen    = true;   // sidebar visibility
+let sbSortable     = null;   // SortableJS instance for sidebar categories
+
+const SIG = {
+  '買い':        { cls: 'sig-buy',     lbl: '★ 買いシグナル (GC)' },
+  '売り':        { cls: 'sig-sell',    lbl: '★ 売りシグナル (DC)' },
+  '上昇トレンド':{ cls: 'sig-bullish', lbl: '↑ 上昇トレンド' },
+  '下降トレンド':{ cls: 'sig-bearish', lbl: '↓ 下降トレンド' },
+  '様子見':      { cls: 'sig-neutral', lbl: '━ 様子見' },
+};
+const sigCfg = s => SIG[s] || { cls: 'sig-neutral', lbl: s };
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function getSlice(chart, months) {
+  const n = chart.dates.length;
+  const from = (months === null || months >= n) ? 0 : Math.max(0, n - months);
+  const s = k => chart[k].slice(from);
+  return {
+    dates: s('dates'), close: s('close'),
+    macd: s('macd'), signal: s('signal'), histogram: s('histogram'),
+  };
+}
+
+function applyPeriod(months) {
+  currentPeriod = months;
+  document.querySelectorAll('.pbtn').forEach(b =>
+    b.classList.toggle('on', +b.dataset.m === months)
+  );
+  if (detailData) { destroyCharts(); drawCharts(detailData); }
+}
+
+function fmtPrice(p, cur) {
+  return cur === 'JPY'
+    ? p.toLocaleString('ja-JP', { maximumFractionDigits: 0 })
+    : p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+const sym = cur => cur === 'JPY' ? '¥' : '$';
+
+// ── SVG mini chart ─────────────────────────────────────────────────────────
+function miniSVG(closes, histograms, uid) {
+  const W = 200, H = 74, PH = 44, MH = H - PH - 2;
+  const n = Math.min(20, closes.length);
+  const c = closes.slice(-n);
+  // null values in histogram (MACD warmup) → treat as 0
+  const h = histograms.slice(-n).map(v => v === null ? 0 : v);
+  if (n < 2) return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}"></svg>`;
+
+  // Price line
+  const minC = Math.min(...c), maxC = Math.max(...c), rC = maxC - minC || 1;
+  const py = v => PH - 3 - ((v - minC) / rC) * (PH - 8);
+  const px = i => (i / (n - 1)) * W;
+  const pts = c.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+  const fill = `0,${PH} ${pts} ${W},${PH}`;
+
+  // MACD bars
+  const maxH = Math.max(...h.map(Math.abs)) || 1;
+  const bw = (W / n) * 0.72;
+  const midY = PH + 2 + MH / 2;
+  const bars = h.map((v, i) => {
+    const bh = Math.max(1, Math.abs(v) / maxH * (MH / 2 - 1));
+    const x  = (i / n) * W + (W / n) * 0.14;
+    const y  = v >= 0 ? midY - bh : midY;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${v >= 0 ? '#3fb950' : '#f85149'}" rx="0.5"/>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none">
+    <defs><linearGradient id="g${uid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#58a6ff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#58a6ff" stop-opacity="0"/>
+    </linearGradient></defs>
+    <polygon points="${fill}" fill="url(#g${uid})"/>
+    <polyline points="${pts}" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <line x1="0" y1="${midY}" x2="${W}" y2="${midY}" stroke="#21262d" stroke-width="0.5"/>
+    ${bars}
+  </svg>`;
+}
+
+// ── Signal sidebar ─────────────────────────────────────────────────────────
+const DEFAULT_SIG_ORDER = ['買い', '売り', '上昇トレンド', '下降トレンド', '様子見'];
+let SIGNAL_ORDER = JSON.parse(localStorage.getItem('signal_order') || JSON.stringify(DEFAULT_SIG_ORDER));
+
+const SIG_BG = {
+  '買い': 'sbg-buy', '売り': 'sbg-sell',
+  '上昇トレンド': 'sbg-bullish', '下降トレンド': 'sbg-bearish', '様子見': '',
+};
+
+function renderSidebar() {
+  const el = document.getElementById('sb-body');
+  if (!el) return;
+
+  const groups = {};
+  SIGNAL_ORDER.forEach(s => { groups[s] = []; });
+  order.forEach(t => {
+    const d = stockData[t];
+    if (d) groups[d.signal || '様子見']?.push(d);
+  });
+
+  el.innerHTML = SIGNAL_ORDER.map(sig => {
+    const items = groups[sig] || [];
+    const cfg   = SIG[sig] || { cls: 'sig-neutral', lbl: sig };
+    const bg    = SIG_BG[sig] || '';
+    const rows  = items.length
+      ? items.map(d => {
+          const name  = (d.custom_name && d.custom_name.trim()) ? d.custom_name : d.name;
+          const s     = sym(d.currency);
+          const isAct = d.ticker === active ? ' sb-active' : '';
+          return `<div class="sb-item${isAct}" data-t="${d.ticker}" onclick="selectCard('${d.ticker}')">
+            <div class="sb-item-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+            <div class="sb-item-sub">
+              <span class="sb-ticker-lbl">${d.ticker}</span>
+              <span class="sb-price-lbl">${s}${fmtPrice(d.current_price, d.currency)}</span>
+            </div>
+          </div>`;
+        }).join('')
+      : `<div class="sb-empty">なし</div>`;
+
+    return `<div class="sb-cat ${bg}" data-sig="${sig}">
+      <div class="sb-cat-hd ${cfg.cls}">
+        <span class="sb-drag" title="ドラッグで並び替え">⠿</span>
+        <span style="flex:1">${cfg.lbl}</span>
+        <span class="sb-count">${items.length}</span>
+      </div>${rows}
+    </div>`;
+  }).join('');
+
+  initSbSortable();
+}
+
+function updateSidebarActive(ticker) {
+  document.querySelectorAll('#sb-body .sb-item').forEach(el => {
+    el.classList.toggle('sb-active', el.dataset.t === ticker);
+    if (el.dataset.t === ticker) {
+      el.style.paddingLeft = '10px';
+      el.style.borderLeft  = '2px solid var(--blue)';
+    } else {
+      el.style.paddingLeft = '';
+      el.style.borderLeft  = '';
+    }
+  });
+}
+
+function initSbSortable() {
+  if (sbSortable) { sbSortable.destroy(); sbSortable = null; }
+  const body = document.getElementById('sb-body');
+  if (!body) return;
+  sbSortable = Sortable.create(body, {
+    animation: 160,
+    handle: '.sb-drag',
+    ghostClass: 'sb-cat-ghost',
+    onEnd: function() {
+      const newOrder = Array.from(body.querySelectorAll('.sb-cat[data-sig]'))
+        .map(el => el.dataset.sig);
+      SIGNAL_ORDER.length = 0;
+      SIGNAL_ORDER.push(...newOrder);
+      localStorage.setItem('signal_order', JSON.stringify(SIGNAL_ORDER));
+    },
+  });
+}
+
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  document.getElementById('signal-sidebar').classList.toggle('collapsed', !sidebarOpen);
+}
+
+// ── Grid rendering ─────────────────────────────────────────────────────────
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  if (!order.length) {
+    grid.innerHTML = `<div class="empty-grid"><div class="ico">📊</div><p>上の入力欄から銘柄を追加してください</p></div>`;
+    return;
+  }
+  grid.innerHTML = order.map((t, i) => {
+    const d = stockData[t];
+    return d ? cardHTML(t, d, i) : skeletonHTML(t);
+  }).join('');
+  requestAnimationFrame(initSortable);
+  renderSidebar();
+}
+
+function skeletonHTML(t) {
+  return `<div class="card" id="card-${t}" style="cursor:default">
+    <div class="card-head">
+      <div style="flex:1">
+        <div class="skel" style="height:13px;width:75%;margin-bottom:5px"></div>
+        <div class="skel" style="height:11px;width:38%"></div>
+      </div>
+    </div>
+    <div class="skel" style="height:23px;width:55%"></div>
+    <div class="skel" style="height:12px;width:50%"></div>
+    <div class="skel" style="height:22px;width:110px;border-radius:10px"></div>
+    <div class="skel" style="height:74px;border-radius:4px"></div>
+    <div class="skel" style="height:38px"></div>
+  </div>`;
+}
+
+function cardHTML(t, d, i) {
+  const cfg = sigCfg(d.signal);
+  const s   = sym(d.currency);
+  const sgn = d.change >= 0 ? '+' : '';
+  const cc  = d.change >= 0 ? 'pos' : 'neg';
+  const act         = t === active ? ' active' : '';
+  const mini        = miniSVG(d.chart.close, d.chart.histogram, i);
+  const displayName = (d.custom_name && d.custom_name.trim()) ? d.custom_name : d.name;
+  const memoHtml    = d.memo ? `<div class="card-memo">${escapeHtml(d.memo)}</div>` : '';
+  const isJP        = d.symbol.endsWith('.T');
+  const mktClass    = isJP ? ' mkt-jp' : ' mkt-us';
+
+  return `<div class="card${act}${mktClass}" id="card-${t}" onclick="selectCard('${t}')">
+    <div class="card-head">
+      <span class="drag-handle" title="ドラッグで並び替え">⠿</span>
+      <div style="flex:1;min-width:0">
+        <div class="card-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
+        <div class="card-ticker">${d.ticker}</div>
+      </div>
+      <button class="btn-edit" onclick="openEditModal(event,'${t}')" title="編集">✎</button>
+      <button class="rm" onclick="removeCard(event,'${t}')" title="削除">×</button>
+    </div>
+    <div class="card-price">${s}${fmtPrice(d.current_price, d.currency)}</div>
+    <div class="card-change ${cc}">${sgn}${s}${fmtPrice(Math.abs(d.change), d.currency)} (${sgn}${d.change_pct.toFixed(2)}%)</div>
+    <span class="badge ${cfg.cls}">${cfg.lbl}</span>
+    <div class="mini-svg">${mini}</div>
+    ${memoHtml}
+  </div>`;
+}
+
+// ── Select card ────────────────────────────────────────────────────────────
+function selectCard(t) {
+  if (active === t) { closeDetail(); return; }
+
+  active = t;
+  document.querySelectorAll('.card').forEach(el => el.classList.remove('active'));
+  document.getElementById('card-' + t)?.classList.add('active');
+  updateSidebarActive(t);
+
+  const d = stockData[t];
+  if (d) { renderDetail(d); return; }
+
+  fetch('/api/stock/' + t).then(r => r.json()).then(data => {
+    stockData[t] = data;
+    if (active === t) renderDetail(data);
+  });
+}
+
+function closeDetail() {
+  active        = null;
+  detailData    = null;
+  currentPeriod = 36;
+  document.querySelectorAll('.card').forEach(el => el.classList.remove('active'));
+  document.getElementById('detail').style.display = 'none';
+  destroyCharts();
+  updateSidebarActive(null);
+}
+
+function destroyCharts() {
+  if (priceChart) { priceChart.destroy(); priceChart = null; }
+  if (macdChart)  { macdChart.destroy();  macdChart  = null; }
+}
+
+// ── Detail panel ───────────────────────────────────────────────────────────
+function renderDetail(data) {
+  destroyCharts();
+  detailData    = data;
+  currentPeriod = 36;
+  const s           = sym(data.currency);
+  const cfg         = sigCfg(data.signal);
+  const sgn         = data.change >= 0 ? '+' : '';
+  const cc          = data.change >= 0 ? 'pos' : 'neg';
+  const mc          = data.macd_value >= 0 ? 'pos' : 'neg';
+  const hc          = data.histogram_value >= 0 ? 'pos' : 'neg';
+  const displayName = (data.custom_name && data.custom_name.trim()) ? data.custom_name : data.name;
+
+  const panel = document.getElementById('detail');
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="detail-hd">
+      <div class="detail-left">
+        <div class="d-name">${escapeHtml(displayName)}</div>
+        <div class="d-meta">${data.symbol} ｜ 月足 MACD (12,26,9) ｜ 更新: ${data.updated_at}</div>
+        <div class="d-sig"><span class="badge ${cfg.cls}" style="font-size:13px;padding:5px 14px">${cfg.lbl}</span></div>
+      </div>
+      <div class="detail-right">
+        <div class="d-price">${s}${fmtPrice(data.current_price, data.currency)}</div>
+        <div class="d-change ${cc}">${sgn}${s}${fmtPrice(Math.abs(data.change), data.currency)} (${sgn}${data.change_pct.toFixed(2)}%)</div>
+      </div>
+      <div class="detail-btns">
+        <button class="btn-sm" onclick="openEditModal(null,'${data.ticker}')">✎ 編集</button>
+        <button class="btn-sm" onclick="refreshCard('${data.ticker}')">↻ 更新</button>
+        <button class="btn-close" onclick="closeDetail()">✕ 閉じる</button>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-lbl">MACD</div>
+        <div class="stat-val ${mc}">${data.macd_value >= 0 ? '+' : ''}${data.macd_value.toFixed(4)}</div></div>
+      <div class="stat"><div class="stat-lbl">シグナル</div>
+        <div class="stat-val">${data.signal_value.toFixed(4)}</div></div>
+      <div class="stat"><div class="stat-lbl">ヒストグラム</div>
+        <div class="stat-val ${hc}">${data.histogram_value >= 0 ? '+' : ''}${data.histogram_value.toFixed(4)}</div></div>
+    </div>
+
+    <div class="detail-memo-hd">
+      <div class="detail-memo-lbl">メモ</div>
+    </div>
+    <div class="detail-memo">${data.memo ? escapeHtml(data.memo) : '<span style="opacity:.4">メモなし — ✎ 編集から追加できます</span>'}</div>
+
+    <div class="period-bar">
+      <span class="period-lbl">表示期間:</span>
+      <button class="pbtn" data-m="12" onclick="applyPeriod(12)">1年</button>
+      <button class="pbtn on"  data-m="36" onclick="applyPeriod(36)">3年</button>
+      <button class="pbtn" data-m="60" onclick="applyPeriod(60)">5年</button>
+      <button class="pbtn" data-m="120" onclick="applyPeriod(120)">10年</button>
+      <button class="pbtn" onclick="resetZoom()" title="ズームをリセット">↺ リセット</button>
+      <span style="margin-left:auto;font-size:10px;color:var(--muted);white-space:nowrap">ホイール: ズーム　ドラッグ: パン</span>
+    </div>
+
+    <div class="chart-box">
+      <div class="chart-lbl">月足 終値チャート</div>
+      <div class="ch-price"><canvas id="priceChart"></canvas></div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-lbl">MACD (12,26,9) — 青:MACD線　橙:シグナル線　棒:ヒストグラム</div>
+      <div class="ch-macd"><canvas id="macdChart"></canvas></div>
+    </div>`;
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  drawCharts(data);
+}
+
+// ── Zoom helpers ───────────────────────────────────────────────────────────
+function syncChartZoom(source) {
+  const target = source === priceChart ? macdChart : priceChart;
+  if (!target) return;
+  const { min, max } = source.scales.x;
+  target.zoomScale('x', { min, max }, 'none');
+}
+
+function resetZoom() {
+  if (priceChart) priceChart.resetZoom();
+  if (macdChart)  macdChart.resetZoom();
+}
+
+// ── MACD signal annotation builder ────────────────────────────────────────
+function buildMacdAnnotations(dates, macd, signal) {
+  const ann = {};
+  let n = 0;
+  for (let i = 1; i < dates.length; i++) {
+    if (macd[i] == null || signal[i] == null || macd[i-1] == null || signal[i-1] == null) continue;
+    const gc = macd[i-1] <= signal[i-1] && macd[i] > signal[i];  // golden cross → 買い
+    const dc = macd[i-1] >= signal[i-1] && macd[i] < signal[i];  // dead cross   → 売り
+    if (!gc && !dc) continue;
+
+    const color = gc ? '#3fb950' : '#f85149';
+    const text  = gc ? '▲ 買い' : '▼ 売り';
+
+    ann[`sig_${n++}`] = {
+      type: 'line',
+      xMin: i, xMax: i,                          // category index
+      borderColor: color + '55',
+      borderWidth: 1.5,
+      borderDash: [4, 3],
+      label: {
+        display: true,
+        content: text,
+        position: gc ? 'end' : 'start',          // 買い→上端, 売り→下端
+        backgroundColor: color + 'e0',
+        color: '#fff',
+        font: { size: 10, weight: 700 },
+        padding: { x: 6, y: 3 },
+        borderRadius: 4,
+        yAdjust: gc ? -2 : 2,
+      },
+    };
+  }
+  return ann;
+}
+
+// ── Chart.js ───────────────────────────────────────────────────────────────
+const BOPTS = {
+  responsive: true, maintainAspectRatio: false, animation: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: { labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 }, padding: 14 } },
+    tooltip: { backgroundColor: '#1c2128', borderColor: '#30363d', borderWidth: 1,
+               titleColor: '#e6edf3', bodyColor: '#8b949e', padding: 10 },
+  },
+  scales: {
+    x: { ticks: { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 12, maxRotation: 0 }, grid: { color: '#21262d' } },
+    y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } },
+  },
+};
+
+function drawCharts(data) {
+  const { dates, close, macd, signal, histogram } = getSlice(data.chart, currentPeriod);
+  const s = sym(data.currency), cur = data.currency;
+
+  // Price
+  const pCtx = document.getElementById('priceChart').getContext('2d');
+  const grad = pCtx.createLinearGradient(0, 0, 0, 230);
+  grad.addColorStop(0, 'rgba(88,166,255,.25)');
+  grad.addColorStop(1, 'rgba(88,166,255,0)');
+  priceChart = new Chart(pCtx, {
+    type: 'line',
+    data: { labels: dates, datasets: [{
+      label: '終値', data: close, borderColor: '#58a6ff',
+      backgroundColor: grad, borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1,
+    }]},
+    options: { ...BOPTS, plugins: { ...BOPTS.plugins,
+      tooltip: { ...BOPTS.plugins.tooltip,
+        callbacks: { label: ctx => ` ${s}${fmtPrice(ctx.raw, cur)}` }},
+      zoom: {
+        zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
+                onZoomComplete: ({ chart }) => syncChartZoom(chart) },
+        pan:  { enabled: true, mode: 'x',
+                onPanComplete:  ({ chart }) => syncChartZoom(chart) },
+        limits: { x: { minRange: 4 } },
+      },
+    }},
+  });
+
+  // MACD
+  const mCtx = document.getElementById('macdChart').getContext('2d');
+  macdChart = new Chart(mCtx, {
+    type: 'bar',
+    data: { labels: dates, datasets: [
+      { type: 'bar',  label: 'ヒストグラム', data: histogram,
+        backgroundColor: histogram.map(v => (v ?? 0) >= 0 ? 'rgba(63,185,80,.75)' : 'rgba(248,81,73,.75)'), order: 3 },
+      { type: 'line', label: 'MACD',     data: macd,
+        borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.1, spanGaps: false, order: 1 },
+      { type: 'line', label: 'シグナル', data: signal,
+        borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.1, spanGaps: false, order: 0 },
+      { type: 'line', label: '', data: Array(dates.length).fill(0),
+        borderColor: '#30363d', backgroundColor: 'transparent', borderWidth: 1,
+        borderDash: [4, 4], pointRadius: 0, order: 4 },
+    ]},
+    options: { ...BOPTS, plugins: { ...BOPTS.plugins,
+      legend: { ...BOPTS.plugins.legend, labels: { ...BOPTS.plugins.legend.labels,
+        filter: item => item.text !== '' }},
+      tooltip: { ...BOPTS.plugins.tooltip, callbacks: {
+        label: ctx => ctx.dataset.label ? ` ${ctx.dataset.label}: ${Number(ctx.raw).toFixed(4)}` : null }},
+      annotation: { annotations: buildMacdAnnotations(dates, macd, signal) },
+      zoom: {
+        zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
+                onZoomComplete: ({ chart }) => syncChartZoom(chart) },
+        pan:  { enabled: true, mode: 'x',
+                onPanComplete:  ({ chart }) => syncChartZoom(chart) },
+        limits: { x: { minRange: 4 } },
+      },
+    }},
+  });
+}
+
+// ── Add / Remove / Refresh ─────────────────────────────────────────────────
+async function addTicker() {
+  const input = document.getElementById('t-input');
+  const btn   = document.getElementById('add-btn');
+  const t     = input.value.trim().toUpperCase();
+  if (!t) return;
+
+  btn.textContent = '検証中…'; btn.disabled = true;
+  try {
+    const res  = await fetch('/api/watchlist', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticker: t }),
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+
+    input.value = '';
+    order = data.watchlist;
+    renderGrid();
+
+    // Fetch data for the newly added ticker
+    const added = data.watchlist[data.watchlist.length - 1];
+    fetch('/api/stock/' + added).then(r => r.json()).then(d => {
+      stockData[added] = d;
+      renderGrid();
+    });
+  } catch (e) {
+    alert('エラー: ' + e.message);
+  } finally {
+    btn.textContent = '＋ 追加'; btn.disabled = false;
+  }
+}
+
+async function removeCard(e, t) {
+  e.stopPropagation();
+  const res  = await fetch('/api/watchlist/' + t, { method: 'DELETE' });
+  const data = await res.json();
+  if (!data.watchlist) return;
+
+  delete stockData[t];
+  order = data.watchlist;
+  if (active === t) { active = null; destroyCharts(); document.getElementById('detail').style.display = 'none'; }
+  renderGrid();
+}
+
+async function refreshCard(t) {
+  delete stockData[t];
+  renderGrid();
+  const res  = await fetch('/api/stock/' + t);
+  const data = await res.json();
+  stockData[t] = data;
+  renderGrid();
+  if (active === t) renderDetail(data);
+}
+
+// ── Drag-to-reorder ────────────────────────────────────────────────────────
+function initSortable() {
+  if (sortableInst) { sortableInst.destroy(); sortableInst = null; }
+  const grid = document.getElementById('grid');
+  if (!grid || !order.length) return;
+
+  sortableInst = Sortable.create(grid, {
+    animation: 180,
+    handle: '.drag-handle',
+    filter: '.rm, .btn-edit',
+    preventOnFilter: true,
+    ghostClass: 'card-ghost',
+    chosenClass: 'card-chosen',
+    onEnd: async function() {
+      // Read new order from DOM
+      const newOrder = Array.from(
+        grid.querySelectorAll('.card[id^="card-"]')
+      ).map(el => el.id.slice(5));  // strip "card-"
+
+      order = newOrder;
+
+      try {
+        await fetch('/api/watchlist/order', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: newOrder }),
+        });
+      } catch(e) {
+        console.error('順序保存エラー:', e);
+      }
+    },
+  });
+}
+
+// ── Edit modal ─────────────────────────────────────────────────────────────
+function openEditModal(event, ticker) {
+  if (event) event.stopPropagation();
+  modalTicker = ticker;
+  const d = stockData[ticker] || {};
+  document.getElementById('modal-title').textContent = `編集: ${ticker}`;
+  document.getElementById('modal-name').value = d.custom_name || '';
+  document.getElementById('modal-memo').value = d.memo || '';
+  document.getElementById('edit-modal').classList.remove('hidden');
+  document.getElementById('modal-name').focus();
+}
+
+function closeModal() {
+  document.getElementById('edit-modal').classList.add('hidden');
+  modalTicker = null;
+}
+
+function handleModalOverlayClick(event) {
+  if (event.target === document.getElementById('edit-modal')) closeModal();
+}
+
+async function saveModal() {
+  if (!modalTicker) return;
+  const btn  = document.getElementById('modal-save-btn');
+  const name = document.getElementById('modal-name').value.trim();
+  const memo = document.getElementById('modal-memo').value;
+  btn.textContent = '保存中…'; btn.disabled = true;
+  try {
+    const res  = await fetch('/api/metadata/' + modalTicker, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custom_name: name, memo }),
+    });
+    const saved = await res.json();
+    if (!saved.success) { alert('保存に失敗しました'); return; }
+    if (stockData[modalTicker]) {
+      stockData[modalTicker].custom_name = saved.custom_name;
+      stockData[modalTicker].memo        = saved.memo;
+    }
+    closeModal();
+    renderGrid();
+    if (active === modalTicker && detailData) {
+      detailData.custom_name = saved.custom_name;
+      detailData.memo        = saved.memo;
+      renderDetail(detailData);
+    }
+  } catch(e) {
+    alert('エラー: ' + e.message);
+  } finally {
+    btn.textContent = '保存'; btn.disabled = false;
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ── Init ───────────────────────────────────────────────────────────────────
+async function init() {
+  // Get order first, show skeletons immediately
+  const wl = await fetch('/api/watchlist').then(r => r.json());
+  order = wl.watchlist;
+  renderGrid();
+
+  // Fetch all stocks in parallel (server-side)
+  const all = await fetch('/api/watchlist/all').then(r => r.json());
+  order     = all.watchlist || order;
+  stockData = all.data || {};
+  renderGrid();
+}
+
+document.getElementById('t-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addTicker();
+});
+
+init();
+</script>
+</body>
+</html>
