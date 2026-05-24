@@ -308,6 +308,19 @@ header {
 .modal-textarea { resize:vertical; min-height:90px; }
 .modal-actions { display:flex; gap:8px; justify-content:flex-end; }
 
+/* ── 外部リンク ──────────────────────────────────── */
+a.card-name {
+  color: var(--text); text-decoration: none; display: block;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+a.card-name:hover { color: var(--blue); text-decoration: underline; }
+.ext-link {
+  display: inline-block; font-size: 13px; color: var(--muted);
+  text-decoration: none; margin-left: 6px; vertical-align: middle;
+  transition: color .15s;
+}
+.ext-link:hover { color: var(--blue); }
+
 /* ── スマホ対応 (〜600px) ────────────────────────── */
 @media (max-width: 600px) {
   body { height: auto; overflow: auto; }
@@ -433,6 +446,14 @@ let modalTicker    = null;  // ticker currently being edited in modal
 let sortableInst   = null;  // SortableJS instance
 let sidebarOpen    = true;   // sidebar visibility
 let sbSortable     = null;   // SortableJS instance for sidebar categories
+
+// 銘柄の外部サイトURL（日本株→Kabutan、米国株→Yahoo Finance）
+function externalUrl(symbol, ticker) {
+  if (symbol.endsWith('.T')) {
+    return `https://kabutan.jp/stock/?code=${ticker}`;
+  }
+  return `https://finance.yahoo.com/quote/${ticker}`;
+}
 
 const SIG = {
   '買い':        { cls: 'sig-buy',     lbl: '★ 買いシグナル (GC)' },
@@ -642,12 +663,14 @@ function cardHTML(t, d, i) {
   const memoHtml    = d.memo ? `<div class="card-memo">${escapeHtml(d.memo)}</div>` : '';
   const isJP        = d.symbol.endsWith('.T');
   const mktClass    = isJP ? ' mkt-jp' : ' mkt-us';
+  const extUrl      = externalUrl(d.symbol, d.ticker);
 
   return `<div class="card${act}${mktClass}" id="card-${t}" onclick="selectCard('${t}')">
     <div class="card-head">
       <span class="drag-handle" title="ドラッグで並び替え">⠿</span>
       <div style="flex:1;min-width:0">
-        <div class="card-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
+        <a class="card-name" href="${extUrl}" target="_blank" rel="noopener noreferrer"
+           onclick="event.stopPropagation()" title="${escapeHtml(displayName)} - 外部サイトで開く">${escapeHtml(displayName)}</a>
         <div class="card-ticker">${d.ticker}</div>
       </div>
       <button class="btn-edit" onclick="openEditModal(event,'${t}')" title="編集">✎</button>
@@ -706,13 +729,14 @@ function renderDetail(data) {
   const mc          = data.macd_value >= 0 ? 'pos' : 'neg';
   const hc          = data.histogram_value >= 0 ? 'pos' : 'neg';
   const displayName = (data.custom_name && data.custom_name.trim()) ? data.custom_name : data.name;
+  const detailExtUrl = externalUrl(data.symbol, data.ticker);
 
   const panel = document.getElementById('detail');
   panel.style.display = 'block';
   panel.innerHTML = `
     <div class="detail-hd">
       <div class="detail-left">
-        <div class="d-name">${escapeHtml(displayName)}</div>
+        <div class="d-name">${escapeHtml(displayName)}<a class="ext-link" href="${detailExtUrl}" target="_blank" rel="noopener noreferrer" title="外部サイトで開く">↗</a></div>
         <div class="d-meta">${data.symbol} ｜ 月足 MACD (12,26,9) ｜ 更新: ${data.updated_at}</div>
         <div class="d-sig"><span class="badge ${cfg.cls}" style="font-size:13px;padding:5px 14px">${cfg.lbl}</span></div>
       </div>
