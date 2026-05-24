@@ -292,6 +292,8 @@ header {
 .detail-memo { background:var(--bg3); border:1px solid var(--border); border-radius:8px;
   padding:12px 14px; margin-bottom:10px; font-size:13px; color:var(--text);
   white-space:pre-wrap; line-height:1.6; min-height:36px; }
+.memo-link { color:var(--blue); text-decoration:underline; word-break:break-all; }
+.memo-link:hover { opacity:.75; }
 .detail-memo-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
 .detail-memo-lbl { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
 /* ── モーダル ────────────────────────────────── */
@@ -446,6 +448,15 @@ let modalTicker    = null;  // ticker currently being edited in modal
 let sortableInst   = null;  // SortableJS instance
 let sidebarOpen    = true;   // sidebar visibility
 let sbSortable     = null;   // SortableJS instance for sidebar categories
+
+// メモ内のURLをクリッカブルリンクに変換
+function linkifyMemo(text) {
+  const escaped = escapeHtml(text);
+  return escaped.replace(
+    /(https?:\/\/[^\s<>"']+)/g,
+    '<a class="memo-link" href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+  );
+}
 
 // 銘柄の外部サイトURL（日本株→Kabutan、米国株→Yahoo Finance）
 function externalUrl(symbol, ticker) {
@@ -660,7 +671,7 @@ function cardHTML(t, d, i) {
   const act         = t === active ? ' active' : '';
   const mini        = miniSVG(d.chart.close, d.chart.histogram, i);
   const displayName = (d.custom_name && d.custom_name.trim()) ? d.custom_name : d.name;
-  const memoHtml    = d.memo ? `<div class="card-memo">${escapeHtml(d.memo)}</div>` : '';
+  const memoHtml    = d.memo ? `<div class="card-memo">${linkifyMemo(d.memo)}</div>` : '';
   const isJP        = d.symbol.endsWith('.T');
   const mktClass    = isJP ? ' mkt-jp' : ' mkt-us';
   const extUrl      = externalUrl(d.symbol, d.ticker);
@@ -763,7 +774,7 @@ function renderDetail(data) {
     <div class="detail-memo-hd">
       <div class="detail-memo-lbl">メモ</div>
     </div>
-    <div class="detail-memo">${data.memo ? escapeHtml(data.memo) : '<span style="opacity:.4">メモなし — ✎ 編集から追加できます</span>'}</div>
+    <div class="detail-memo">${data.memo ? linkifyMemo(data.memo) : '<span style="opacity:.4">メモなし — ✎ 編集から追加できます</span>'}</div>
 
     <div class="period-bar">
       <span class="period-lbl">表示期間:</span>
