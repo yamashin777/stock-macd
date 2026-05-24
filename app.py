@@ -50,9 +50,6 @@ def enrich_with_metadata(result: dict) -> dict:
     return result
 
 
-watchlist = load_watchlist()
-
-
 def normalize_ticker(ticker: str) -> str:
     t = ticker.strip().upper()
     if t.endswith('.T'):
@@ -193,13 +190,14 @@ def index():
 
 @app.route('/api/watchlist', methods=['GET'])
 def get_watchlist():
-    return jsonify({'watchlist': watchlist})
+    return jsonify({'watchlist': load_watchlist()})
 
 
 @app.route('/api/watchlist/all')
 def get_all_stocks():
     """Fetch all watchlist stocks in parallel and return together."""
-    if not watchlist:
+    wl = load_watchlist()
+    if not wl:
         return jsonify({'watchlist': [], 'data': {}, 'errors': {}})
 
     def safe_fetch(ticker):
@@ -209,14 +207,14 @@ def get_all_stocks():
             return ticker, None, str(e)
 
     data, errors = {}, {}
-    with ThreadPoolExecutor(max_workers=min(len(watchlist), 6)) as ex:
-        for ticker, result, err in ex.map(safe_fetch, watchlist):
+    with ThreadPoolExecutor(max_workers=min(len(wl), 6)) as ex:
+        for ticker, result, err in ex.map(safe_fetch, wl):
             if err:
                 errors[ticker] = err
             else:
                 data[ticker] = enrich_with_metadata(result)
 
-    return jsonify({'watchlist': watchlist, 'data': data, 'errors': errors})
+    return jsonify({'watchlist': wl, 'data': data, 'errors': errors})
 
 
 @app.route('/api/watchlist', methods=['POST'])
@@ -227,7 +225,8 @@ def add_to_watchlist():
         return jsonify({'error': 'ティッカーを入力してください'}), 400
 
     disp = display_ticker(normalize_ticker(raw))
-    if disp in watchlist:
+    wl = load_watchlist()
+    if disp in wl:
         return jsonify({'error': 'すでにリストにあります'}), 400
 
     try:
@@ -237,35 +236,35 @@ def add_to_watchlist():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-    watchlist.append(disp)
-    save_watchlist(watchlist)
+    wl.append(disp)
+    save_watchlist(wl)
     meta = load_metadata()
     if disp not in meta:
         meta[disp] = {'custom_name': '', 'memo': ''}
         save_metadata(meta)
-    return jsonify({'success': True, 'watchlist': watchlist})
+    return jsonify({'success': True, 'watchlist': wl})
 
 
 @app.route('/api/watchlist/order', methods=['PUT'])
 def reorder_watchlist():
     body = request.get_json(silent=True) or {}
     new_order = body.get('order', [])
-    if not isinstance(new_order, list) or set(new_order) != set(watchlist):
+    wl = load_watchlist()
+    if not isinstance(new_order, list) or set(new_order) != set(wl):
         return jsonify({'error': '銘柄リストが一致しません'}), 400
-    watchlist.clear()
-    watchlist.extend(new_order)
-    save_watchlist(watchlist)
-    return jsonify({'success': True, 'watchlist': watchlist})
+    save_watchlist(new_order)
+    return jsonify({'success': True, 'watchlist': new_order})
 
 
 @app.route('/api/watchlist/<ticker>', methods=['DELETE'])
 def remove_from_watchlist(ticker):
     t = ticker.upper()
-    if t not in watchlist:
+    wl = load_watchlist()
+    if t not in wl:
         return jsonify({'error': '見つかりません'}), 404
-    watchlist.remove(t)
-    save_watchlist(watchlist)
-    return jsonify({'success': True, 'watchlist': watchlist})
+    wl.remove(t)
+    save_watchlist(wl)
+    return jsonify({'success': True, 'watchlist': wl})
 
 
 @app.route('/api/metadata', methods=['GET'])
