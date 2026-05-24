@@ -307,6 +307,71 @@ header {
 .modal-input:focus, .modal-textarea:focus { outline:none; border-color:var(--blue); }
 .modal-textarea { resize:vertical; min-height:90px; }
 .modal-actions { display:flex; gap:8px; justify-content:flex-end; }
+
+/* ── スマホ対応 (〜600px) ────────────────────────── */
+@media (max-width: 600px) {
+  body { height: auto; overflow: auto; }
+
+  header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .hd-title h1 { font-size: 13px; }
+  .hd-title p  { font-size: 10px; }
+  .hd-form {
+    width: 100%;
+    flex-wrap: nowrap;
+    margin-left: 0;
+  }
+  .hd-form input {
+    width: 100%;
+    font-size: 16px; /* iOSでズームさせない */
+    padding: 9px 12px;
+  }
+  .btn {
+    padding: 9px 14px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .app-body { flex-direction: column; overflow: visible; }
+
+  /* サイドバーはスマホでは非表示をデフォルトに */
+  .signal-sidebar {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 220px;
+  }
+  .signal-sidebar.collapsed { max-height: 0; overflow: hidden; }
+
+  .page { padding: 10px 10px; }
+
+  /* カードを1列 */
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .card { padding: 14px 14px; }
+  .card-price  { font-size: 24px; }
+  .card-name   { font-size: 14px; }
+
+  /* 詳細パネル */
+  .detail { padding: 14px 12px; }
+  .detail-hd { flex-direction: column; gap: 8px; }
+  .detail-right .d-price { font-size: 26px; }
+  .detail-right { text-align: left; }
+  .stats { grid-template-columns: repeat(3,1fr); gap: 6px; }
+  .stat-val { font-size: 14px; }
+  .ch-price { height: 180px; }
+  .ch-macd  { height: 130px; }
+
+  /* ボタン類をタップしやすく */
+  .pbtn { padding: 8px 14px; font-size: 13px; }
+  .btn-sm, .btn-close { padding: 8px 14px; }
+}
 </style>
 </head>
 <body>
