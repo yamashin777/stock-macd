@@ -3,17 +3,65 @@ import yfinance as yf
 import pandas as pd
 import os
 import json
+import requests as http_requests
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 
-WATCHLIST_FILE = 'watchlist.json'
-METADATA_FILE  = 'metadata.json'
+WATCHLIST_FILE    = 'watchlist.json'
+METADATA_FILE     = 'metadata.json'
 DEFAULT_WATCHLIST = ['AAPL', 'NVDA', '7203', '1605']
+
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '')
+
+
+def _sb_headers():
+    return {
+        'apikey': SUPABASE_KEY,
+        'Authorization': f'Bearer {SUPABASE_KEY}',
+        'Content-Type': 'application/json',
+    }
+
+
+def _sb_load(key):
+    """Supabaseのsettingsテーブルからvalueを取得する"""
+    try:
+        res = http_requests.get(
+            f'{SUPABASE_URL}/rest/v1/settings?key=eq.{key}&select=value',
+            headers=_sb_headers(), timeout=5
+        )
+        data = res.json()
+        if data:
+            return data[0]['value']
+    except Exception as e:
+        print(f'Supabase load error ({key}): {e}')
+    return None
+
+
+def _sb_save(key, value):
+    """Supabaseのsettingsテーブルにvalueをupsertする"""
+    try:
+        headers = _sb_headers()
+        headers['Prefer'] = 'resolution=merge-duplicates'
+        http_requests.post(
+            f'{SUPABASE_URL}/rest/v1/settings',
+            json={'key': key, 'value': value},
+            headers=headers, timeout=5
+        )
+        return True
+    except Exception as e:
+        print(f'Supabase save error ({key}): {e}')
+    return False
 
 
 def load_watchlist():
+    if SUPABASE_URL and SUPABASE_KEY:
+        data = _sb_load('watchlist')
+        if data is not None:
+            return data
+    # ローカル fallback
     if os.path.exists(WATCHLIST_FILE):
         try:
             with open(WATCHLIST_FILE, 'r', encoding='utf-8') as f:
@@ -24,11 +72,19 @@ def load_watchlist():
 
 
 def save_watchlist(wl):
+    if SUPABASE_URL and SUPABASE_KEY:
+        if _sb_save('watchlist', wl):
+            return
     with open(WATCHLIST_FILE, 'w', encoding='utf-8') as f:
         json.dump(wl, f, ensure_ascii=False)
 
 
 def load_metadata():
+    if SUPABASE_URL and SUPABASE_KEY:
+        data = _sb_load('metadata')
+        if data is not None:
+            return data
+    # ローカル fallback
     if os.path.exists(METADATA_FILE):
         try:
             with open(METADATA_FILE, 'r', encoding='utf-8') as f:
@@ -39,6 +95,9 @@ def load_metadata():
 
 
 def save_metadata(meta):
+    if SUPABASE_URL and SUPABASE_KEY:
+        if _sb_save('metadata', meta):
+            return
     with open(METADATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
