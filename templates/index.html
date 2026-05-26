@@ -36,12 +36,29 @@ header {
 }
 .sb-toggle-btn:hover { border-color: var(--blue); color: var(--text); }
 .hd-form { display: flex; gap: 8px; margin-left: auto; }
-.hd-form input {
+.hd-input-wrap { position: relative; width: 260px; }
+.hd-input-wrap input {
+  width: 100%;
   background: var(--bg3); border: 1px solid var(--border); color: var(--text);
-  padding: 7px 12px; border-radius: 6px; font-size: 13px; width: 210px;
+  padding: 7px 12px; border-radius: 6px; font-size: 13px;
 }
-.hd-form input:focus { outline: none; border-color: var(--blue); }
-.hd-form input::placeholder { color: var(--muted); }
+.hd-input-wrap input:focus { outline: none; border-color: var(--blue); }
+.hd-input-wrap input::placeholder { color: var(--muted); }
+/* オートコンプリートドロップダウン */
+.hd-suggest {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 300;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.55); overflow: hidden; display: none;
+}
+.hd-suggest.show { display: block; }
+.suggest-item {
+  padding: 9px 13px; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,.04); transition: background .1s;
+}
+.suggest-item:last-child { border-bottom: none; }
+.suggest-item:hover, .suggest-item.focused { background: var(--bg3); }
+.suggest-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.suggest-sub  { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .btn {
   background: var(--blue); color: #fff; border: none;
   padding: 7px 16px; border-radius: 6px; cursor: pointer;
@@ -372,8 +389,8 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
     flex-wrap: nowrap;
     margin-left: 0;
   }
-  .hd-form input {
-    width: 100%;
+  .hd-input-wrap { width: 100%; }
+  .hd-input-wrap input {
     font-size: 16px; /* iOSでズームさせない */
     padding: 9px 12px;
   }
@@ -431,7 +448,10 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
     <p>MACD (12, 26, 9) ｜ 月足 ｜ 過去3年</p>
   </div>
   <div class="hd-form">
-    <input id="t-input" type="text" placeholder="銘柄コード例: AAPL, 7203" autocomplete="off" />
+    <div class="hd-input-wrap">
+      <input id="t-input" type="text" placeholder="銘柄名またはコード: トヨタ, AAPL, 7203" autocomplete="off" />
+      <div class="hd-suggest" id="hd-suggest"></div>
+    </div>
     <button class="btn" id="add-btn" onclick="addTicker()">＋ 追加</button>
   </div>
 </header>
@@ -469,6 +489,78 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
 </div>
 
 <script>
+// ── Autocomplete ───────────────────────────────────────────────────────────
+let suggestTimer = null;
+let suggestIndex = -1;
+
+function initAutocomplete() {
+  const input = document.getElementById('t-input');
+
+  input.addEventListener('input', () => {
+    clearTimeout(suggestTimer);
+    const q = input.value.trim();
+    if (q.length < 1) { hideSuggest(); return; }
+    suggestTimer = setTimeout(() => fetchSuggest(q), 280);
+  });
+
+  input.addEventListener('keydown', e => {
+    const items = document.querySelectorAll('.suggest-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      suggestIndex = Math.min(suggestIndex + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('focused', i === suggestIndex));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      suggestIndex = Math.max(suggestIndex - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('focused', i === suggestIndex));
+    } else if (e.key === 'Enter') {
+      if (suggestIndex >= 0 && items[suggestIndex]) {
+        items[suggestIndex].click();
+        e.preventDefault();
+      }
+    } else if (e.key === 'Escape') {
+      hideSuggest();
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.hd-input-wrap')) hideSuggest();
+  });
+}
+
+async function fetchSuggest(q) {
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    showSuggest(data.results || []);
+  } catch(e) { hideSuggest(); }
+}
+
+function showSuggest(results) {
+  const el = document.getElementById('hd-suggest');
+  suggestIndex = -1;
+  if (!results.length) { hideSuggest(); return; }
+  el.innerHTML = results.map(r => {
+    const disp = r.symbol.endsWith('.T') ? r.symbol.slice(0, -2) : r.symbol;
+    return `<div class="suggest-item" onclick="selectSuggest('${disp}')">
+      <div class="suggest-name">${escapeHtml(r.name)}</div>
+      <div class="suggest-sub">${r.symbol}　${r.exchange}</div>
+    </div>`;
+  }).join('');
+  el.classList.add('show');
+}
+
+function hideSuggest() {
+  document.getElementById('hd-suggest').classList.remove('show');
+  suggestIndex = -1;
+}
+
+function selectSuggest(ticker) {
+  document.getElementById('t-input').value = ticker;
+  hideSuggest();
+  document.getElementById('t-input').focus();
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 let stockData      = {};   // ticker → API data
 let order          = [];   // watchlist order
@@ -1118,6 +1210,7 @@ document.getElementById('t-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') addTicker();
 });
 
+initAutocomplete();
 init();
 </script>
 </body>

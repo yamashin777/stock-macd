@@ -346,6 +346,39 @@ def update_metadata(ticker):
     return jsonify({'success': True, 'ticker': disp, **entry})
 
 
+@app.route('/api/search')
+def search_ticker():
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify({'results': []})
+    try:
+        res = http_requests.get(
+            'https://query1.finance.yahoo.com/v1/finance/search',
+            params={
+                'q': q,
+                'quotesCount': 8,
+                'newsCount': 0,
+                'enableFuzzyQuery': 'false',
+                'quotesQueryId': 'tss_match_phrase_query',
+            },
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
+            timeout=5
+        )
+        quotes = res.json().get('quotes', [])
+        results = [
+            {
+                'symbol':   item.get('symbol', ''),
+                'name':     item.get('longname') or item.get('shortname') or item.get('symbol', ''),
+                'exchange': item.get('exchange', ''),
+            }
+            for item in quotes
+            if item.get('quoteType') in ('EQUITY', 'ETF')
+        ]
+        return jsonify({'results': results})
+    except Exception as e:
+        return jsonify({'results': [], 'error': str(e)})
+
+
 @app.route('/api/stock/<ticker>')
 def get_stock(ticker):
     try:
