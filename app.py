@@ -262,20 +262,28 @@ def scan_stock_data(ticker: str) -> dict:
         elif pm >= ps and cm < cs:
             last_dc = common[i].strftime('%Y-%m')
 
+    # ミニチャート用: 直近18ヶ月のデータ
+    chart_n = min(18, len(hist))
+    chart_close = [round(float(v), 4) for v in hist['Close'].iloc[-chart_n:].tolist()]
+    macd_hist_full = (macd - sig).fillna(0)
+    chart_macd_hist = [round(float(v), 6) for v in macd_hist_full.iloc[-chart_n:].tolist()]
+
     return {
-        'ticker':        disp,
-        'symbol':        symbol,
-        'name':          STOCK_NAMES.get(disp, disp),
-        'currency':      currency,
-        'current_price': curr_price,
-        'change':        change,
-        'change_pct':    change_pct,
-        'signal':        signal_text,
-        'signal_type':   signal_type,
-        'last_gc':       last_gc,
-        'last_dc':       last_dc,
-        'custom_name':   '',
-        'memo':          '',
+        'ticker':          disp,
+        'symbol':          symbol,
+        'name':            STOCK_NAMES.get(disp, disp),
+        'currency':        currency,
+        'current_price':   curr_price,
+        'change':          change,
+        'change_pct':      change_pct,
+        'signal':          signal_text,
+        'signal_type':     signal_type,
+        'last_gc':         last_gc,
+        'last_dc':         last_dc,
+        'custom_name':     '',
+        'memo':            '',
+        'chart_close':     chart_close,
+        'chart_macd_hist': chart_macd_hist,
     }
 
 
