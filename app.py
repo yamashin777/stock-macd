@@ -14,22 +14,56 @@ WATCHLIST_FILE    = 'watchlist.json'
 METADATA_FILE     = 'metadata.json'
 DEFAULT_WATCHLIST = ['AAPL', 'NVDA', '7203', '1605']
 
-# ── スキャン対象銘柄リスト ─────────────────────────────────────────────────────
+# ── スキャン対象銘柄リスト & 名前辞書 ─────────────────────────────────────────
 SCAN_STOCKS = [
-    # 日本株（日経225主要銘柄）
+    # 日本株
     '7203', '6758', '8306', '9984', '7974', '6861', '8035', '9433', '9432',
     '7751', '6954', '8766', '4661', '7267', '7201', '6752', '6902', '5401',
     '8411', '8316', '4568', '4523', '6367', '6301', '6326', '6501', '6503',
     '7741', '8801', '3382', '6920', '4502', '2914', '2802', '9022', '9020',
     '4519', '8604', '6702', '8002', '8031', '8058', '9843', '6098', '4755',
     '6645', '7832', '9766', '8267', '7550', '1605', '5020', '7309', '4578',
-    '6178', '3659', '2413', '4704',
-    # 米国株（主要銘柄）
+    '6178', '2413', '4704',
+    # 米国株
     'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM', 'V',
     'JNJ', 'WMT', 'PG', 'MA', 'UNH', 'HD', 'CVX', 'LLY', 'ABBV', 'MRK',
     'KO', 'PEP', 'XOM', 'BAC', 'AVGO', 'COST', 'ORCL', 'CSCO', 'AMD',
     'CRM', 'DIS', 'NFLX',
 ]
+
+STOCK_NAMES = {
+    # 日本株
+    '7203': 'トヨタ自動車', '6758': 'ソニーグループ', '8306': '三菱UFJ FG',
+    '9984': 'ソフトバンクグループ', '7974': '任天堂', '6861': 'キーエンス',
+    '8035': '東京エレクトロン', '9433': 'KDDI', '9432': '日本電信電話(NTT)',
+    '7751': 'キヤノン', '6954': 'ファナック', '8766': '東京海上HD',
+    '4661': 'オリエンタルランド', '7267': 'ホンダ', '7201': '日産自動車',
+    '6752': 'パナソニックHD', '6902': 'デンソー', '5401': '日本製鉄',
+    '8411': 'みずほFG', '8316': '三井住友FG', '4568': '第一三共',
+    '4523': 'エーザイ', '6367': 'ダイキン工業', '6301': 'コマツ',
+    '6326': 'クボタ', '6501': '日立製作所', '6503': '三菱電機',
+    '7741': 'HOYA', '8801': '三井不動産', '3382': 'セブン&アイHD',
+    '6920': 'レーザーテック', '4502': '武田薬品工業', '2914': '日本たばこ産業',
+    '2802': '味の素', '9022': 'JR東海', '9020': 'JR東日本',
+    '4519': '中外製薬', '8604': '野村HD', '6702': '富士通',
+    '8002': '丸紅', '8031': '三井物産', '8058': '三菱商事',
+    '9843': 'ニトリHD', '6098': 'リクルートHD', '4755': '楽天グループ',
+    '6645': 'オムロン', '7832': 'バンダイナムコHD', '9766': 'コナミグループ',
+    '8267': 'イオン', '7550': 'ゼンショーHD', '1605': 'INPEX',
+    '5020': 'ENEOSホールディングス', '7309': 'シマノ', '4578': '大塚HD',
+    '6178': '日本郵政', '2413': 'エムスリー', '4704': 'トレンドマイクロ',
+    # 米国株
+    'AAPL': 'Apple', 'MSFT': 'Microsoft', 'NVDA': 'NVIDIA',
+    'GOOGL': 'Alphabet (Google)', 'AMZN': 'Amazon', 'META': 'Meta',
+    'TSLA': 'Tesla', 'JPM': 'JPMorgan Chase', 'V': 'Visa',
+    'JNJ': 'Johnson & Johnson', 'WMT': 'Walmart', 'PG': 'Procter & Gamble',
+    'MA': 'Mastercard', 'UNH': 'UnitedHealth', 'HD': 'Home Depot',
+    'CVX': 'Chevron', 'LLY': 'Eli Lilly', 'ABBV': 'AbbVie',
+    'MRK': 'Merck', 'KO': 'Coca-Cola', 'PEP': 'PepsiCo',
+    'XOM': 'ExxonMobil', 'BAC': 'Bank of America', 'AVGO': 'Broadcom',
+    'COST': 'Costco', 'ORCL': 'Oracle', 'CSCO': 'Cisco',
+    'AMD': 'AMD', 'CRM': 'Salesforce', 'DIS': 'Disney', 'NFLX': 'Netflix',
+}
 SCAN_CACHE_TTL = 12 * 3600  # 12時間
 
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
@@ -175,6 +209,73 @@ def get_signal(macd, sig):
     if curr_m < curr_s:
         return '下降トレンド', 'bearish'
     return '様子見', 'neutral'
+
+
+def scan_stock_data(ticker: str) -> dict:
+    """スキャン専用の軽量取得（stock.infoをスキップして高速化）"""
+    symbol = normalize_ticker(ticker)
+    stock  = yf.Ticker(symbol)
+
+    start_str = (datetime.now() - timedelta(days=365 * 10 + 90)).strftime('%Y-%m-%d')
+    raw = stock.history(start=start_str, interval='1wk')
+    if raw.empty:
+        raise ValueError(f'データが見つかりません: {symbol}')
+
+    hist = raw.resample('MS').agg(
+        Close=('Close', 'last'),
+    ).dropna(subset=['Close'])
+
+    disp      = display_ticker(symbol)
+    is_jp     = symbol.endswith('.T')
+    currency  = 'JPY' if is_jp else 'USD'
+    curr_price = float(hist['Close'].iloc[-1])
+    prev_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else curr_price
+
+    # fast_info だけ使う（info より大幅に速い）
+    try:
+        fi = stock.fast_info
+        currency   = getattr(fi, 'currency', currency) or currency
+        lp = getattr(fi, 'last_price', None)
+        pc = getattr(fi, 'previous_close', None)
+        if lp: curr_price = float(lp)
+        if pc: prev_close = float(pc)
+    except Exception:
+        pass
+
+    change     = curr_price - prev_close
+    change_pct = (change / prev_close * 100) if prev_close else 0.0
+
+    close = hist['Close']
+    macd, sig, _ = calculate_macd(close)
+    signal_text, signal_type = get_signal(macd, sig)
+
+    last_gc = last_dc = None
+    m_vals = macd.dropna()
+    s_vals = sig.reindex(m_vals.index).dropna()
+    common = m_vals.index.intersection(s_vals.index)
+    for i in range(1, len(common)):
+        pm, cm = float(m_vals[common[i-1]]), float(m_vals[common[i]])
+        ps, cs = float(s_vals[common[i-1]]), float(s_vals[common[i]])
+        if pm <= ps and cm > cs:
+            last_gc = common[i].strftime('%Y-%m')
+        elif pm >= ps and cm < cs:
+            last_dc = common[i].strftime('%Y-%m')
+
+    return {
+        'ticker':        disp,
+        'symbol':        symbol,
+        'name':          STOCK_NAMES.get(disp, disp),
+        'currency':      currency,
+        'current_price': curr_price,
+        'change':        change,
+        'change_pct':    change_pct,
+        'signal':        signal_text,
+        'signal_type':   signal_type,
+        'last_gc':       last_gc,
+        'last_dc':       last_dc,
+        'custom_name':   '',
+        'memo':          '',
+    }
 
 
 def fetch_stock_data(ticker: str) -> dict:
@@ -395,10 +496,10 @@ def scan_signals():
                 'cached':     True,
             })
 
-    # 新規スキャン
+    # 新規スキャン（軽量関数を使用）
     def safe_scan(ticker):
         try:
-            return enrich_with_metadata(fetch_stock_data(ticker))
+            return scan_stock_data(ticker)
         except Exception:
             return None
 
