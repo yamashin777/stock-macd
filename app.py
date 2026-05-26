@@ -3,15 +3,34 @@ import yfinance as yf
 import pandas as pd
 import os
 import json
+import time
 import requests as http_requests
 from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = Flask(__name__)
 
 WATCHLIST_FILE    = 'watchlist.json'
 METADATA_FILE     = 'metadata.json'
 DEFAULT_WATCHLIST = ['AAPL', 'NVDA', '7203', '1605']
+
+# ── スキャン対象銘柄リスト ─────────────────────────────────────────────────────
+SCAN_STOCKS = [
+    # 日本株（日経225主要銘柄）
+    '7203', '6758', '8306', '9984', '7974', '6861', '8035', '9433', '9432',
+    '7751', '6954', '8766', '4661', '7267', '7201', '6752', '6902', '5401',
+    '8411', '8316', '4568', '4523', '6367', '6301', '6326', '6501', '6503',
+    '7741', '8801', '3382', '6920', '4502', '2914', '2802', '9022', '9020',
+    '4519', '8604', '6702', '8002', '8031', '8058', '9843', '6098', '4755',
+    '6645', '7832', '9766', '8267', '7550', '1605', '5020', '7309', '4578',
+    '6178', '3659', '2413', '4704',
+    # 米国株（主要銘柄）
+    'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM', 'V',
+    'JNJ', 'WMT', 'PG', 'MA', 'UNH', 'HD', 'CVX', 'LLY', 'ABBV', 'MRK',
+    'KO', 'PEP', 'XOM', 'BAC', 'AVGO', 'COST', 'ORCL', 'CSCO', 'AMD',
+    'CRM', 'DIS', 'NFLX',
+]
+SCAN_CACHE_TTL = 12 * 3600  # 12時間
 
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '')
@@ -216,6 +235,19 @@ def fetch_stock_data(ticker: str) -> dict:
         """Align series with all_dates; use None where NaN (MACD warmup)."""
         return [None if pd.isna(v) else round(float(v), 6) for v in series]
 
+    # ゴールデンクロス・デッドクロスの発生日を検出
+    last_gc = last_dc = None
+    m_vals = macd.dropna()
+    s_vals = sig.reindex(m_vals.index).dropna()
+    common = m_vals.index.intersection(s_vals.index)
+    for i in range(1, len(common)):
+        pm, cm = float(m_vals[common[i-1]]), float(m_vals[common[i]])
+        ps, cs = float(s_vals[common[i-1]]), float(s_vals[common[i]])
+        if pm <= ps and cm > cs:
+            last_gc = common[i].strftime('%Y-%m')
+        elif pm >= ps and cm < cs:
+            last_dc = common[i].strftime('%Y-%m')
+
     return {
         'ticker': display_ticker(symbol),
         'symbol': symbol,
@@ -229,6 +261,8 @@ def fetch_stock_data(ticker: str) -> dict:
         'macd_value': _last(macd),
         'signal_value': _last(sig),
         'histogram_value': _last(hist_vals),
+        'last_gc': last_gc,
+        'last_dc': last_dc,
         'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
         'chart': {
             'dates':     all_dates,
@@ -344,6 +378,43 @@ def update_metadata(ticker):
     meta[disp] = entry
     save_metadata(meta)
     return jsonify({'success': True, 'ticker': disp, **entry})
+
+
+@app.route('/api/scan')
+def scan_signals():
+    """スキャン銘柄の買いシグナルを返す（Supabaseキャッシュ12時間）"""
+    force = request.args.get('force', 'false') == 'true'
+
+    # キャッシュ確認
+    if not force and SUPABASE_URL and SUPABASE_KEY:
+        cached = _sb_load('scan_cache')
+        if cached and time.time() - cached.get('updated_at', 0) < SCAN_CACHE_TTL:
+            return jsonify({
+                'results':    cached['results'],
+                'updated_at': cached['updated_at'],
+                'cached':     True,
+            })
+
+    # 新規スキャン
+    def safe_scan(ticker):
+        try:
+            return enrich_with_metadata(fetch_stock_data(ticker))
+        except Exception:
+            return None
+
+    results = []
+    with ThreadPoolExecutor(max_workers=15) as ex:
+        futures = {ex.submit(safe_scan, t): t for t in SCAN_STOCKS}
+        for future in as_completed(futures):
+            data = future.result()
+            if data:
+                results.append(data)
+
+    updated_at = time.time()
+    if SUPABASE_URL and SUPABASE_KEY:
+        _sb_save('scan_cache', {'results': results, 'updated_at': updated_at})
+
+    return jsonify({'results': results, 'updated_at': updated_at, 'cached': False})
 
 
 @app.route('/api/search')
