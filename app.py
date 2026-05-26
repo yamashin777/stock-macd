@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import json
 import time
+import threading
 import requests as http_requests
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -481,41 +482,60 @@ def update_metadata(ticker):
     return jsonify({'success': True, 'ticker': disp, **entry})
 
 
-@app.route('/api/scan')
-def scan_signals():
-    """スキャン銘柄の買いシグナルを返す（Supabaseキャッシュ12時間）"""
-    force = request.args.get('force', 'false') == 'true'
+# ── スキャン バックグラウンドスレッド管理 ─────────────────────────────────────
+_scan_lock  = threading.Lock()
+_scan_state = {'status': 'idle', 'results': None, 'updated_at': 0}
 
-    # キャッシュ確認
-    if not force and SUPABASE_URL and SUPABASE_KEY:
-        cached = _sb_load('scan_cache')
-        if cached and time.time() - cached.get('updated_at', 0) < SCAN_CACHE_TTL:
-            return jsonify({
-                'results':    cached['results'],
-                'updated_at': cached['updated_at'],
-                'cached':     True,
-            })
-
-    # 新規スキャン（軽量関数を使用）
-    def safe_scan(ticker):
-        try:
-            return scan_stock_data(ticker)
-        except Exception:
-            return None
-
+def _run_scan_thread():
     results = []
-    with ThreadPoolExecutor(max_workers=15) as ex:
-        futures = {ex.submit(safe_scan, t): t for t in SCAN_STOCKS}
-        for future in as_completed(futures):
-            data = future.result()
+    def safe(t):
+        try: return scan_stock_data(t)
+        except: return None
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        for data in ex.map(safe, SCAN_STOCKS):
             if data:
                 results.append(data)
-
     updated_at = time.time()
     if SUPABASE_URL and SUPABASE_KEY:
         _sb_save('scan_cache', {'results': results, 'updated_at': updated_at})
+    with _scan_lock:
+        _scan_state.update({'status': 'done', 'results': results, 'updated_at': updated_at})
 
-    return jsonify({'results': results, 'updated_at': updated_at, 'cached': False})
+
+@app.route('/api/scan')
+def scan_signals():
+    """スキャン状態を返す（バックグラウンドで実行してポーリング方式）"""
+    force = request.args.get('force', 'false') == 'true'
+
+    # Supabaseキャッシュ確認
+    if not force and SUPABASE_URL and SUPABASE_KEY:
+        cached = _sb_load('scan_cache')
+        if cached and time.time() - cached.get('updated_at', 0) < SCAN_CACHE_TTL:
+            with _scan_lock:
+                _scan_state.update({'status': 'done',
+                                    'results': cached['results'],
+                                    'updated_at': cached['updated_at']})
+            return jsonify({'status': 'done',
+                            'results': cached['results'],
+                            'updated_at': cached['updated_at']})
+
+    # メモリ上の状態確認
+    with _scan_lock:
+        state = dict(_scan_state)
+
+    if state['status'] == 'done' and not force:
+        return jsonify({'status': 'done',
+                        'results': state['results'],
+                        'updated_at': state['updated_at']})
+
+    # バックグラウンドスレッド起動（まだ動いていない場合）
+    if state['status'] != 'running':
+        with _scan_lock:
+            _scan_state['status'] = 'running'
+        t = threading.Thread(target=_run_scan_thread, daemon=True)
+        t.start()
+
+    return jsonify({'status': 'running'})
 
 
 @app.route('/api/search')

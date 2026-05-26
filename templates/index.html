@@ -563,7 +563,7 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
       <span id="scan-updated" style="font-size:11px;color:var(--muted)"></span>
-      <button class="btn-sm" onclick="loadScan(true)">↻ 再スキャン</button>
+      <button class="btn-sm" onclick="scanData=null;loadScan(true)">↻ 再スキャン</button>
     </div>
   </div>
   <div id="scan-content"></div>
@@ -1326,19 +1326,46 @@ function switchTab(tab) {
 let scanData   = null;
 let scanFilter = 'gc3';
 
+let _scanPolling = false;
+
 async function loadScan(force = false) {
-  const el = document.getElementById('scan-content');
   document.getElementById('scan-toolbar').style.display = 'none';
+  _showScanLoading(0);
+  _scanPolling = true;
+  await _pollScan(force, Date.now());
+}
+
+function _showScanLoading(elapsed) {
+  const el = document.getElementById('scan-content');
+  const sec = Math.round(elapsed / 1000);
   el.innerHTML = `<div class="sig-empty">
-    📡 スキャン中です…<br>
-    <span style="font-size:11px;margin-top:8px;display:block">約90銘柄のMACDを計算しています（初回は30〜60秒かかります）</span>
+    📡 スキャン中です… ${sec > 0 ? `(${sec}秒経過)` : ''}<br>
+    <span style="font-size:11px;margin-top:8px;display:block">
+      約90銘柄のMACDを計算しています。初回は60秒ほどかかります。
+    </span>
   </div>`;
+}
+
+async function _pollScan(force, startTime) {
+  if (!_scanPolling) return;
   try {
-    const res = await fetch(`/api/scan${force ? '?force=true' : ''}`);
-    scanData = await res.json();
-    renderScanView();
+    const url = `/api/scan${force ? '?force=true' : ''}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    if (data.status === 'done') {
+      _scanPolling = false;
+      scanData = data;
+      renderScanView();
+    } else {
+      // まだ実行中 → 3秒後に再確認
+      _showScanLoading(Date.now() - startTime);
+      setTimeout(() => _pollScan(false, startTime), 3000);
+    }
   } catch(e) {
-    el.innerHTML = `<div class="sig-empty">エラーが発生しました: ${e.message}</div>`;
+    _scanPolling = false;
+    document.getElementById('scan-content').innerHTML =
+      `<div class="sig-empty">エラーが発生しました: ${e.message}</div>`;
   }
 }
 
