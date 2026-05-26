@@ -486,13 +486,106 @@ def update_metadata(ticker):
 _scan_lock  = threading.Lock()
 _scan_state = {'status': 'idle', 'results': None, 'updated_at': 0}
 
+def load_auto_scan_list():
+    """Supabaseから自動取得済み値上がり銘柄リストを返す (stocks, updated_at)"""
+    if SUPABASE_URL and SUPABASE_KEY:
+        data = _sb_load('auto_scan_list')
+        if isinstance(data, dict):
+            return data.get('stocks', []), data.get('updated_at', 0)
+    return [], 0
+
+
+def save_auto_scan_list(stocks):
+    if SUPABASE_URL and SUPABASE_KEY:
+        _sb_save('auto_scan_list', {'stocks': stocks, 'updated_at': time.time()})
+
+
+def fetch_top_gainers(limit=100):
+    """Yahoo Finance スクリーナーで値上がり上位銘柄を取得（JP + US）"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+    }
+    results = []
+    seen = set()
+    for region in ['JP', 'US']:
+        try:
+            r = http_requests.get(
+                'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved',
+                params={
+                    'scrIds': 'day_gainers',
+                    'count': 60,
+                    'region': region,
+                    'formatted': 'false',
+                    'corsDomain': 'finance.yahoo.com',
+                },
+                headers=headers,
+                timeout=15,
+            )
+            quotes = r.json()['finance']['result'][0]['quotes']
+            for q in quotes:
+                sym = q.get('symbol', '')
+                if not sym:
+                    continue
+                disp = display_ticker(sym)
+                if disp not in seen:
+                    seen.add(disp)
+                    results.append(disp)
+        except Exception as e:
+            print(f'fetch_top_gainers [{region}] error: {e}')
+    return results[:limit]
+
+
+def load_scan_list():
+    """デフォルト + 自動取得 + 手動追加 を重複排除してマージ"""
+    custom = []
+    auto_stocks = []
+    if SUPABASE_URL and SUPABASE_KEY:
+        d = _sb_load('scan_list')
+        if isinstance(d, list):
+            custom = d
+        auto_data, _ = load_auto_scan_list()
+        if isinstance(auto_data, list):
+            auto_stocks = auto_data
+
+    default_disps = set(display_ticker(normalize_ticker(t)) for t in SCAN_STOCKS)
+    seen = set(default_disps)
+
+    extra_auto = []
+    for t in auto_stocks:
+        if t not in seen:
+            seen.add(t)
+            extra_auto.append(t)
+
+    extra_custom = []
+    for t in custom:
+        if t not in seen:
+            seen.add(t)
+            extra_custom.append(t)
+
+    return SCAN_STOCKS + extra_auto + extra_custom, custom
+
+
+def save_scan_list(custom):
+    if SUPABASE_URL and SUPABASE_KEY:
+        _sb_save('scan_list', custom)
+
+
+def _invalidate_scan_cache():
+    if SUPABASE_URL and SUPABASE_KEY:
+        _sb_save('scan_cache', {'results': [], 'updated_at': 0})
+    with _scan_lock:
+        _scan_state['status'] = 'idle'
+
+
 def _run_scan_thread():
+    all_stocks, _ = load_scan_list()
     results = []
     def safe(t):
         try: return scan_stock_data(t)
         except: return None
     with ThreadPoolExecutor(max_workers=12) as ex:
-        for data in ex.map(safe, SCAN_STOCKS):
+        for data in ex.map(safe, all_stocks):
             if data:
                 results.append(data)
     updated_at = time.time()
@@ -536,6 +629,91 @@ def scan_signals():
         t.start()
 
     return jsonify({'status': 'running'})
+
+
+@app.route('/api/scan-list', methods=['GET'])
+def get_scan_list():
+    all_stocks, custom = load_scan_list()
+    auto_stocks, auto_updated_at = load_auto_scan_list()
+    return jsonify({
+        'default_count':   len(SCAN_STOCKS),
+        'custom':          custom,
+        'auto':            auto_stocks,
+        'auto_updated_at': auto_updated_at,
+        'total':           len(all_stocks),
+    })
+
+
+@app.route('/api/auto-scan-list/refresh', methods=['POST'])
+def refresh_auto_scan_list():
+    """値上がり上位を取得してスキャンリストを自動更新"""
+    # 除外セット：ウォッチリスト + デフォルト + 手動追加
+    wl = load_watchlist()
+    wl_set = set(wl)
+    default_set = set(display_ticker(normalize_ticker(t)) for t in SCAN_STOCKS)
+    _, custom = load_scan_list()
+    custom_set = set(custom)
+
+    gainers = fetch_top_gainers(limit=150)
+
+    # フィルタリング（ウォッチリスト・デフォルト・手動追加は除外）
+    filtered = [
+        t for t in gainers
+        if t not in wl_set and t not in default_set and t not in custom_set
+    ][:100]
+
+    save_auto_scan_list(filtered)
+    _invalidate_scan_cache()
+
+    auto_stocks, auto_updated_at = load_auto_scan_list()
+    all_stocks, _ = load_scan_list()
+    return jsonify({
+        'success':         True,
+        'auto':            filtered,
+        'auto_updated_at': auto_updated_at,
+        'count':           len(filtered),
+        'total':           len(all_stocks),
+    })
+
+
+@app.route('/api/scan-list', methods=['POST'])
+def add_to_scan_list():
+    body = request.get_json(silent=True) or {}
+    raw  = body.get('ticker', '').strip().upper()
+    if not raw:
+        return jsonify({'error': 'ティッカーを入力してください'}), 400
+
+    disp = display_ticker(normalize_ticker(raw))
+    default_disps = [display_ticker(normalize_ticker(t)) for t in SCAN_STOCKS]
+    _, custom = load_scan_list()
+
+    if disp in default_disps or disp in custom:
+        return jsonify({'error': 'すでにスキャンリストに含まれています'}), 400
+
+    try:
+        h = yf.Ticker(normalize_ticker(disp)).history(period='5d', interval='1d')
+        if h.empty:
+            return jsonify({'error': f'銘柄が見つかりません: {raw}'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+    custom.append(disp)
+    save_scan_list(custom)
+    _invalidate_scan_cache()
+
+    return jsonify({'success': True, 'custom': custom, 'total': len(SCAN_STOCKS) + len(custom)})
+
+
+@app.route('/api/scan-list/<ticker>', methods=['DELETE'])
+def remove_from_scan_list(ticker):
+    disp = display_ticker(normalize_ticker(ticker.upper()))
+    _, custom = load_scan_list()
+    if disp not in custom:
+        return jsonify({'error': 'ユーザー追加銘柄にしか削除できません'}), 400
+    custom.remove(disp)
+    save_scan_list(custom)
+    _invalidate_scan_cache()
+    return jsonify({'success': True, 'custom': custom, 'total': len(SCAN_STOCKS) + len(custom)})
 
 
 @app.route('/api/search')

@@ -409,9 +409,42 @@ header {
 .sig-months-ago { font-size: 11px; color: var(--muted); margin-left: 5px; }
 .scan-toolbar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 10px 2px; margin-bottom: 12px; border-bottom: 1px solid var(--border);
+  padding: 10px 2px; margin-bottom: 0; border-bottom: 1px solid var(--border);
 }
 .scan-filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* スキャンリスト管理パネル */
+.scan-mgmt {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 12px 16px; display: none; margin-bottom: 12px;
+}
+.scan-mgmt.open { display: block; }
+.scan-mgmt-title { font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+.scan-mgmt-add { display: flex; gap: 8px; margin-bottom: 12px; }
+.scan-mgmt-input {
+  flex: 1; background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); padding: 7px 12px; border-radius: 6px; font-size: 13px;
+}
+.scan-mgmt-input:focus { outline: none; border-color: var(--blue); }
+.scan-custom-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.scan-auto-section {
+  border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px;
+}
+.scan-auto-section:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+.scan-auto-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.scan-section-label { font-size: 12px; font-weight: 600; color: var(--text); }
+.scan-auto-info { font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.6; }
+.scan-custom-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 12px; padding: 3px 10px; font-size: 12px;
+}
+.scan-custom-tag button {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 13px; padding: 0; line-height: 1; transition: color .15s;
+}
+.scan-custom-tag button:hover { color: var(--red); }
+.scan-stats { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
 .btn-add-wl {
   background: rgba(63,185,80,.15); color: #3fb950;
   border: 1px solid rgba(63,185,80,.4); padding: 4px 10px;
@@ -561,12 +594,41 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
       <button class="pbtn" id="sf-2" onclick="setScanFilter('gc6')">6ヶ月以内</button>
       <button class="pbtn" id="sf-3" onclick="setScanFilter('all')">全て</button>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap">
+      <span id="scan-total" style="font-size:11px;color:var(--muted)"></span>
+      <button class="btn-sm" onclick="toggleScanMgmt()">⚙ 銘柄管理</button>
       <span id="scan-updated" style="font-size:11px;color:var(--muted)"></span>
       <button class="btn-sm" onclick="scanData=null;loadScan(true)">↻ 再スキャン</button>
     </div>
   </div>
-  <div id="scan-content"></div>
+
+  <!-- スキャンリスト管理パネル -->
+  <div class="scan-mgmt" id="scan-mgmt">
+    <div class="scan-mgmt-title">📋 スキャン対象銘柄の管理</div>
+    <div class="scan-stats" id="scan-mgmt-stats"></div>
+
+    <!-- 値上がり上位 自動取得 -->
+    <div class="scan-auto-section">
+      <div class="scan-auto-header">
+        <span class="scan-section-label">📈 値上がり上位（自動取得）</span>
+        <button class="btn-sm" id="btn-auto-refresh" onclick="refreshAutoScanList()">🔄 取得・更新</button>
+      </div>
+      <div id="scan-auto-info" class="scan-auto-info"></div>
+    </div>
+
+    <!-- 手動追加 -->
+    <div class="scan-auto-section">
+      <div class="scan-section-label">➕ 手動追加</div>
+      <div class="scan-mgmt-add">
+        <input class="scan-mgmt-input" id="scan-add-input"
+          type="text" placeholder="銘柄名またはコードを入力 (例: トヨタ, AAPL)" autocomplete="off" />
+        <button class="btn" onclick="scanListAdd()">＋ 追加</button>
+      </div>
+      <div id="scan-custom-list"></div>
+    </div>
+  </div>
+
+  <div id="scan-content" style="margin-top:12px"></div>
 </div>
 
 <div class="app-body" id="app-body">
@@ -1319,7 +1381,10 @@ function switchTab(tab) {
   document.getElementById('scan-view').classList.toggle('hidden', tab !== 'scan');
 
   if (tab === 'signal') renderSignalView();
-  if (tab === 'scan' && !scanData) loadScan();
+  if (tab === 'scan') {
+    loadScanList();
+    if (!scanData) loadScan();
+  }
 }
 
 // ── 銘柄スキャン ────────────────────────────────────────────────────────────
@@ -1458,6 +1523,143 @@ function renderScanView() {
       </table>
     </div>`;
 }
+
+// ── スキャンリスト管理 ──────────────────────────────────────────────────────
+let scanListData = { default_count: 0, custom: [], auto: [], auto_updated_at: 0, total: 0 };
+
+async function loadScanList() {
+  try {
+    const res = await fetch('/api/scan-list');
+    scanListData = await res.json();
+    if (!scanListData.auto) scanListData.auto = [];
+    renderScanMgmt();
+    const el = document.getElementById('scan-total');
+    if (el) el.textContent = `対象: ${scanListData.total}銘柄`;
+  } catch(e) {}
+}
+
+function toggleScanMgmt() {
+  const el = document.getElementById('scan-mgmt');
+  el.classList.toggle('open');
+  if (el.classList.contains('open')) renderScanMgmt();
+}
+
+function renderScanMgmt() {
+  // 合計統計
+  const stats = document.getElementById('scan-mgmt-stats');
+  if (stats) stats.textContent =
+    `デフォルト: ${scanListData.default_count}銘柄　自動: ${(scanListData.auto||[]).length}銘柄　手動: ${scanListData.custom.length}銘柄　合計: ${scanListData.total}銘柄`;
+
+  // 自動取得セクション
+  const autoEl = document.getElementById('scan-auto-info');
+  if (autoEl) {
+    const auto = scanListData.auto || [];
+    if (auto.length === 0) {
+      autoEl.innerHTML = `<span style="color:var(--muted)">まだ取得されていません。「🔄 取得・更新」で値上がり上位を自動登録できます。</span>`;
+    } else {
+      const updStr = scanListData.auto_updated_at
+        ? new Date(scanListData.auto_updated_at * 1000).toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})
+        : '';
+      autoEl.innerHTML = `<span style="color:var(--green)">${auto.length}銘柄を自動登録済み</span>
+        ${updStr ? `<span style="margin-left:8px">(更新: ${updStr})</span>` : ''}
+        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">
+          ${auto.slice(0, 20).map(t => `<span style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:2px 8px;font-size:11px">${escapeHtml(t)}</span>`).join('')}
+          ${auto.length > 20 ? `<span style="font-size:11px;color:var(--muted);padding:2px 8px">… 他${auto.length-20}銘柄</span>` : ''}
+        </div>`;
+    }
+  }
+
+  // 手動追加セクション
+  const listEl = document.getElementById('scan-custom-list');
+  if (!listEl) return;
+  if (!scanListData.custom.length) {
+    listEl.innerHTML = '<span style="font-size:12px;color:var(--muted)">手動で追加した銘柄はありません</span>';
+    return;
+  }
+  listEl.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:6px">手動追加済み（×で削除）:</div>
+    <div class="scan-custom-list">
+      ${scanListData.custom.map(t => `
+        <span class="scan-custom-tag">
+          ${escapeHtml(t)}
+          <button onclick="scanListRemove('${t}')" title="削除">×</button>
+        </span>`).join('')}
+    </div>`;
+}
+
+async function refreshAutoScanList() {
+  const btn = document.getElementById('btn-auto-refresh');
+  if (btn) { btn.disabled = true; btn.textContent = '取得中…'; }
+  try {
+    const res = await fetch('/api/auto-scan-list/refresh', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      scanListData.auto = data.auto || [];
+      scanListData.auto_updated_at = data.auto_updated_at || 0;
+      scanListData.total = data.total;
+      renderScanMgmt();
+      const el = document.getElementById('scan-total');
+      if (el) el.textContent = `対象: ${data.total}銘柄`;
+      // スキャンキャッシュが無効化されたので再スキャン
+      scanData = null;
+      loadScan(true);
+    } else {
+      alert('取得に失敗しました: ' + (data.error || ''));
+    }
+  } catch(e) {
+    alert('エラー: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 取得・更新'; }
+  }
+}
+
+async function scanListAdd() {
+  const input = document.getElementById('scan-add-input');
+  const val = input.value.trim();
+  if (!val) return;
+  input.disabled = true;
+  try {
+    const res = await fetch('/api/scan-list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticker: val }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      scanListData.custom = data.custom;
+      scanListData.total  = data.total;
+      input.value = '';
+      renderScanMgmt();
+      document.getElementById('scan-total').textContent = `対象: ${data.total}銘柄`;
+    } else {
+      alert(data.error || '追加に失敗しました');
+    }
+  } catch(e) {
+    alert('エラー: ' + e.message);
+  } finally {
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+async function scanListRemove(ticker) {
+  if (!confirm(`「${ticker}」をスキャンリストから削除しますか？`)) return;
+  try {
+    const res = await fetch(`/api/scan-list/${ticker}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      scanListData.custom = data.custom;
+      scanListData.total  = data.total;
+      renderScanMgmt();
+      document.getElementById('scan-total').textContent = `対象: ${data.total}銘柄`;
+    }
+  } catch(e) {}
+}
+
+// スキャン管理入力のEnterキー対応
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('scan-add-input');
+  if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') scanListAdd(); });
+});
 
 async function scanAddToWL(e, ticker) {
   e.stopPropagation();
