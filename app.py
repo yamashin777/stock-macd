@@ -622,13 +622,16 @@ def _run_scan_thread():
             if data:
                 results.append(data)
 
-    # 決算日を順次取得（レート制限対策: 1.5秒間隔）
+    # 並列スキャン直後はレート制限リセット待ち（90秒クールダウン）
+    time.sleep(90)
+
+    # 決算日を順次取得（レート制限対策: 2秒間隔）
     for r in results:
         try:
             r['next_earnings'] = fetch_next_earnings(yf.Ticker(normalize_ticker(r['ticker'])))
         except Exception:
             pass
-        time.sleep(1.5)
+        time.sleep(2)
 
     updated_at = time.time()
     if SUPABASE_URL and SUPABASE_KEY:
@@ -667,6 +670,9 @@ def scan_signals():
     if state['status'] != 'running':
         with _scan_lock:
             _scan_state['status'] = 'running'
+        # force scan時はSupabaseキャッシュを即座に無効化（古い結果が表示されないよう）
+        if force and SUPABASE_URL and SUPABASE_KEY:
+            _sb_save('scan_cache', {'results': [], 'updated_at': 0})
         t = threading.Thread(target=_run_scan_thread, daemon=True)
         t.start()
 
