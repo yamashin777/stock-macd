@@ -393,7 +393,7 @@ header {
   padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border);
 }
 .sig-table td {
-  padding: 10px 10px; border-bottom: 1px solid rgba(255,255,255,.04);
+  padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,.04);
   font-size: 13px; vertical-align: middle;
 }
 .sig-table tr:last-child td { border-bottom: none; }
@@ -457,6 +457,14 @@ header {
   font-size: 10px; color: var(--muted);
   border: 1px solid var(--border); padding: 3px 8px; border-radius: 5px;
   white-space: nowrap;
+}
+.scan-name-chart {
+  display: flex; align-items: center; gap: 8px;
+}
+.scan-name-info { flex: 1; min-width: 0; }
+.scan-inline-chart {
+  flex: 0 0 110px; background: var(--bg3);
+  border-radius: 3px; overflow: hidden; line-height: 0;
 }
 
 /* ── 外部リンク ──────────────────────────────────── */
@@ -1554,17 +1562,21 @@ function renderScanView() {
       : `<button class="btn-add-wl" id="scan-add-${d.ticker}" onclick="scanAddToWL(event,'${d.ticker}')">＋ 追加</button>`;
 
     const chart = d.chart_close
-      ? `<div style="margin-top:4px;background:var(--bg3);border-radius:3px;overflow:hidden">${sparklineSVG(d.chart_close, d.chart_macd_hist, 140, 44)}</div>`
+      ? `<div class="scan-inline-chart">${sparklineSVG(d.chart_close, d.chart_macd_hist, 110, 40)}</div>`
       : '';
 
     return `<tr>
       <td>
-        <div class="sig-name">
-          <a class="ext-link" style="font-size:11px;margin-right:4px" href="${extUrl}" target="_blank" rel="noopener noreferrer">↗</a>
-          ${escapeHtml(displayName)}
+        <div class="scan-name-chart">
+          <div class="scan-name-info">
+            <div class="sig-name">
+              <a class="ext-link" style="font-size:11px;margin-right:4px" href="${extUrl}" target="_blank" rel="noopener noreferrer">↗</a>
+              ${escapeHtml(displayName)}
+            </div>
+            <div class="sig-ticker">${d.ticker}</div>
+          </div>
+          ${chart}
         </div>
-        <div class="sig-ticker">${d.ticker}</div>
-        ${chart}
       </td>
       <td><span class="badge ${cfg.cls}" style="font-size:10px;padding:2px 8px">${cfg.lbl}</span></td>
       <td class="sig-price">${s}${fmtPrice(d.current_price, d.currency)}<br>
