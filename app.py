@@ -5,6 +5,16 @@ import os
 import json
 import time
 import gc
+import ctypes
+
+# Linux環境でPythonがOSにメモリを返却するためのヘルパー
+try:
+    _libc = ctypes.cdll.LoadLibrary('libc.so.6')
+    def _malloc_trim():
+        _libc.malloc_trim(0)
+except Exception:
+    def _malloc_trim():
+        pass
 import threading
 import requests as http_requests
 from datetime import datetime, timedelta
@@ -642,8 +652,14 @@ def _run_scan_thread():
 
     with _scan_lock:
         _scan_state['phase'] = 'earnings'
+
+    # 買い・上昇トレンドを優先して最大60銘柄に絞る（OOM対策）
+    EARN_RANK = {'買い': 0, '上昇トレンド': 1, '様子見': 2, '下降トレンド': 3, '売り': 4}
+    earnings_targets = sorted(results, key=lambda r: EARN_RANK.get(r.get('signal', ''), 5))[:60]
+    print(f'[scan] 決算日取得対象: {len(earnings_targets)}/{len(results)}銘柄')
+
     earnings_ok = 0
-    for r in results:
+    for r in earnings_targets:
         try:
             e = fetch_next_earnings(yf.Ticker(normalize_ticker(r['ticker'])))
             r['next_earnings'] = e
@@ -652,9 +668,10 @@ def _run_scan_thread():
         except Exception:
             pass
         gc.collect()
+        _malloc_trim()   # Pythonのfreeメモリを即座にOSへ返却
         time.sleep(2)
 
-    print(f'[scan] 決算日取得: {earnings_ok}/{len(results)}件')
+    print(f'[scan] 決算日取得: {earnings_ok}/{len(earnings_targets)}件')
     updated_at = time.time()
     if SUPABASE_URL and SUPABASE_KEY:
         _sb_save('scan_cache', {'results': results, 'updated_at': updated_at})
