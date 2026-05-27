@@ -789,6 +789,48 @@ def get_stock(ticker):
         return jsonify({'error': f'データ取得エラー: {e}'}), 500
 
 
+@app.route('/api/debug/earnings')
+def debug_earnings():
+    """一時デバッグ用: lxml確認 + 代表銘柄の決算日取得テスト"""
+    # lxml インストール確認
+    try:
+        import lxml
+        lxml_version = lxml.__version__
+        lxml_ok = True
+    except ImportError as e:
+        lxml_version = None
+        lxml_ok = False
+        lxml_error = str(e)
+
+    # テスト銘柄: トヨタ(JP) + Apple(US)
+    test_results = {}
+    for ticker in ['7203.T', 'AAPL']:
+        try:
+            stock = yf.Ticker(ticker)
+            ed = stock.earnings_dates
+            if ed is None or ed.empty:
+                test_results[ticker] = {'status': 'empty', 'next_earnings': None}
+            else:
+                now = pd.Timestamp.now(tz='UTC')
+                future = ed[ed.index > now]
+                next_dt = future.index.min() if not future.empty else None
+                test_results[ticker] = {
+                    'status': 'ok',
+                    'total_rows': len(ed),
+                    'future_rows': len(future),
+                    'next_earnings': pd.Timestamp(next_dt).tz_convert(None).strftime('%Y-%m-%d') if next_dt else None,
+                }
+        except Exception as e:
+            test_results[ticker] = {'status': 'error', 'error': str(e)}
+
+    return jsonify({
+        'lxml_installed': lxml_ok,
+        'lxml_version': lxml_version,
+        'lxml_error': None if lxml_ok else lxml_error,
+        'earnings_test': test_results,
+    })
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port, threaded=True)
