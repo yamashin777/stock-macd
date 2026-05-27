@@ -268,6 +268,30 @@ def scan_stock_data(ticker: str) -> dict:
     macd_hist_full = (macd - sig).fillna(0)
     chart_macd_hist = [round(float(v), 6) for v in macd_hist_full.iloc[-chart_n:].tolist()]
 
+    # 次回決算日
+    next_earnings = None
+    try:
+        cal = stock.calendar
+        dates = None
+        if isinstance(cal, dict) and cal:
+            raw = cal.get('Earnings Date')
+            if isinstance(raw, list) and raw:
+                dates = raw[0]
+            elif raw is not None:
+                dates = raw
+        elif hasattr(cal, 'empty') and not cal.empty:
+            # DataFrame形式 (旧yfinance)
+            if 'Earnings Date' in cal.columns:
+                dates = cal['Earnings Date'].iloc[0]
+        if dates is not None:
+            ts = pd.Timestamp(dates)
+            if ts.tzinfo is not None:
+                ts = ts.tz_convert(None)
+            if ts > pd.Timestamp.now():
+                next_earnings = ts.strftime('%Y-%m-%d')
+    except Exception:
+        pass
+
     return {
         'ticker':          disp,
         'symbol':          symbol,
@@ -284,6 +308,7 @@ def scan_stock_data(ticker: str) -> dict:
         'memo':            '',
         'chart_close':     chart_close,
         'chart_macd_hist': chart_macd_hist,
+        'next_earnings':   next_earnings,
     }
 
 

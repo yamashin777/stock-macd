@@ -486,6 +486,13 @@ header {
 @media (min-width: 1024px) {
   .scan-inline-chart { flex: 0 0 220px; }
 }
+/* 決算列: モバイルは非表示 */
+.scan-earn-th, .scan-earn-td { display: none; }
+@media (min-width: 600px) {
+  .scan-earn-th, .scan-earn-td { display: table-cell; }
+}
+.earn-soon { color: #f0a000; font-weight: 700; }   /* 30日以内 */
+.earn-imminent { color: #f85149; font-weight: 700; } /* 7日以内 */
 .scan-gc-cell { white-space: nowrap; }
 /* スキャン専用テーブル調整 */
 .scan-table th:last-child { width: 1px; }
@@ -1595,6 +1602,12 @@ function renderScanView() {
       va = SCAN_SIG_RANK[a.signal] ?? 5;
       vb = SCAN_SIG_RANK[b.signal] ?? 5;
       return scanSortDir * (va - vb);
+    } else if (scanSortKey === 'earnings') {
+      // nullは後ろ
+      if (!a.next_earnings && !b.next_earnings) return 0;
+      if (!a.next_earnings) return 1;
+      if (!b.next_earnings) return -1;
+      return scanSortDir * a.next_earnings.localeCompare(b.next_earnings);
     }
     return 0;
   });
@@ -1624,6 +1637,19 @@ function renderScanView() {
       ? `<div class="scan-inline-chart">${sparklineSVG(d.chart_close, d.chart_macd_hist, 110, 40)}</div>`
       : '';
 
+    // 次回決算日までの日数
+    let earnCell = '<span style="color:var(--muted)">—</span>';
+    if (d.next_earnings) {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const eDate = new Date(d.next_earnings); eDate.setHours(0,0,0,0);
+      const days  = Math.round((eDate - today) / 86400000);
+      if (days >= 0) {
+        const cls  = days <= 7 ? 'earn-imminent' : days <= 30 ? 'earn-soon' : '';
+        const label = days === 0 ? '本日' : `${days}日`;
+        earnCell = `<span class="${cls}">${label}</span><br><span style="font-size:10px;color:var(--muted)">${d.next_earnings.slice(5)}</span>`;
+      }
+    }
+
     return `<tr>
       <td>
         <div class="scan-name-chart">
@@ -1643,15 +1669,17 @@ function renderScanView() {
       <td class="sig-price">${s}${fmtPrice(d.current_price, d.currency)}<br>
         <span class="${cc}" style="font-size:11px">${sgn}${d.change_pct.toFixed(2)}%</span></td>
       <td class="scan-gc-cell">${gcCell}</td>
+      <td class="scan-earn-td" style="white-space:nowrap;font-size:12px;text-align:center">${earnCell}</td>
       <td>${addBtn}</td>
     </tr>`;
   }
 
   // ソートインジケーター
-  function thSort(key, label) {
+  function thSort(key, label, extraCls = '') {
     const active = scanSortKey === key;
     const arrow = active ? (scanSortDir === 1 ? ' ▲' : ' ▼') : ' ⇅';
-    return `<th class="scan-th-sort${active ? ' sort-active' : ''}" onclick="setScanSort('${key}')">${label}<span class="sort-arrow">${arrow}</span></th>`;
+    const cls = ['scan-th-sort', active ? 'sort-active' : '', extraCls].filter(Boolean).join(' ');
+    return `<th class="${cls}" onclick="setScanSort('${key}')">${label}<span class="sort-arrow">${arrow}</span></th>`;
   }
 
   el.innerHTML = `
@@ -1662,6 +1690,7 @@ function renderScanView() {
           ${thSort('ticker','銘柄')}
           ${thSort('price','現在値')}
           ${thSort('gc','最終GC')}
+          ${thSort('earnings','決算', 'scan-earn-th')}
           <th></th>
         </tr></thead>
         <tbody>${items.map(scanRowHTML).join('')}</tbody>
