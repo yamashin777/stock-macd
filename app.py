@@ -625,12 +625,21 @@ def _run_scan_thread():
             if data:
                 results.append(data)
 
+    # ── フェーズ1完了: 価格/MACDデータを先に保存 ──────────────────────────────
+    # 決算フェーズでクラッシュしても価格データは確実に見えるようにする
+    prices_at = time.time()
+    if SUPABASE_URL and SUPABASE_KEY:
+        _sb_save('scan_cache', {'results': results, 'updated_at': prices_at})
+    with _scan_lock:
+        _scan_state.update({'status': 'done', 'phase': 'prices_done',
+                            'results': list(results), 'updated_at': prices_at})
+
+    # ── フェーズ2: 決算日を順次取得 ───────────────────────────────────────────
     # 並列スキャン直後はレート制限リセット待ち（90秒クールダウン）
     with _scan_lock:
         _scan_state['phase'] = 'cooldown'
     time.sleep(90)
 
-    # 決算日を順次取得（レート制限対策: 2秒間隔）
     with _scan_lock:
         _scan_state['phase'] = 'earnings'
     earnings_ok = 0
@@ -642,7 +651,7 @@ def _run_scan_thread():
                 earnings_ok += 1
         except Exception:
             pass
-        gc.collect()  # pd.read_html() のメモリを都度解放
+        gc.collect()
         time.sleep(2)
 
     print(f'[scan] 決算日取得: {earnings_ok}/{len(results)}件')
@@ -650,7 +659,8 @@ def _run_scan_thread():
     if SUPABASE_URL and SUPABASE_KEY:
         _sb_save('scan_cache', {'results': results, 'updated_at': updated_at})
     with _scan_lock:
-        _scan_state.update({'status': 'done', 'phase': 'done', 'results': results, 'updated_at': updated_at})
+        _scan_state.update({'status': 'done', 'phase': 'done',
+                            'results': results, 'updated_at': updated_at})
 
 
 @app.route('/api/scan')
