@@ -802,6 +802,28 @@ def get_stock(ticker):
 
 
 
+@app.route('/api/debug/earnings/<ticker>')
+def debug_one_earnings(ticker):
+    """一時デバッグ: 1銘柄の決算日取得テスト"""
+    symbol = normalize_ticker(ticker)
+    result = {'symbol': symbol}
+    try:
+        stock = yf.Ticker(symbol)
+        ed = stock.earnings_dates
+        if ed is None:
+            result['earnings_dates'] = 'None'
+        elif ed.empty:
+            result['earnings_dates'] = 'empty'
+        else:
+            now = pd.Timestamp.now(tz='UTC')
+            future = ed[ed.index > now]
+            result['earnings_dates'] = f'{len(ed)} rows, {len(future)} future'
+            result['next_earnings'] = fetch_next_earnings(stock)
+    except Exception as e:
+        result['error'] = str(e)
+    return jsonify(result)
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port, threaded=True)
