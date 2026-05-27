@@ -467,6 +467,13 @@ header {
   border-radius: 3px; overflow: hidden; line-height: 0;
 }
 .sig-ticker-row { display: flex; align-items: center; margin-top: 2px; }
+.scan-th-sort {
+  cursor: pointer; user-select: none; white-space: nowrap;
+  transition: color .15s;
+}
+.scan-th-sort:hover { color: var(--text); }
+.scan-th-sort.sort-active { color: var(--blue); }
+.sort-arrow { font-size: 9px; margin-left: 2px; opacity: .7; }
 .scan-gc-cell { white-space: nowrap; }
 /* スキャン専用テーブル調整 */
 .scan-table th:last-child { width: 1px; }
@@ -1405,8 +1412,22 @@ function switchTab(tab) {
 }
 
 // ── 銘柄スキャン ────────────────────────────────────────────────────────────
-let scanData   = null;
-let scanFilter = 'gc3';
+let scanData    = null;
+let scanFilter  = 'gc3';
+let scanSortKey = 'gc';   // 'gc' | 'ticker' | 'price' | 'change' | 'signal'
+let scanSortDir = -1;     // -1=降順, 1=昇順
+
+const SIGNAL_ORDER = { '買い':0, '上昇トレンド':1, '様子見':2, '下降トレンド':3, '売り':4 };
+
+function setScanSort(key) {
+  if (scanSortKey === key) {
+    scanSortDir *= -1;
+  } else {
+    scanSortKey = key;
+    scanSortDir = key === 'gc' ? -1 : 1;  // GCは新しい順、他は昇順をデフォルト
+  }
+  renderScanView();
+}
 
 let _scanPolling = false;
 
@@ -1541,12 +1562,29 @@ function renderScanView() {
     return true;
   });
 
-  // GC日で新しい順にソート
+  // ソート
   items.sort((a, b) => {
-    if (!a.last_gc && !b.last_gc) return 0;
-    if (!a.last_gc) return 1;
-    if (!b.last_gc) return -1;
-    return b.last_gc.localeCompare(a.last_gc);
+    let va, vb;
+    if (scanSortKey === 'gc') {
+      if (!a.last_gc && !b.last_gc) return 0;
+      if (!a.last_gc) return 1;
+      if (!b.last_gc) return -1;
+      return scanSortDir * b.last_gc.localeCompare(a.last_gc) * -1;
+    } else if (scanSortKey === 'ticker') {
+      va = a.ticker; vb = b.ticker;
+      return scanSortDir * va.localeCompare(vb, 'ja');
+    } else if (scanSortKey === 'price') {
+      va = a.current_price; vb = b.current_price;
+      return scanSortDir * (va - vb);
+    } else if (scanSortKey === 'change') {
+      va = a.change_pct; vb = b.change_pct;
+      return scanSortDir * (va - vb);
+    } else if (scanSortKey === 'signal') {
+      va = SIGNAL_ORDER[a.signal] ?? 5;
+      vb = SIGNAL_ORDER[b.signal] ?? 5;
+      return scanSortDir * (va - vb);
+    }
+    return 0;
   });
 
   if (!items.length) {
@@ -1597,13 +1635,22 @@ function renderScanView() {
     </tr>`;
   }
 
+  // ソートインジケーター
+  function thSort(key, label) {
+    const active = scanSortKey === key;
+    const arrow = active ? (scanSortDir === 1 ? ' ▲' : ' ▼') : ' ⇅';
+    return `<th class="scan-th-sort${active ? ' sort-active' : ''}" onclick="setScanSort('${key}')">${label}<span class="sort-arrow">${arrow}</span></th>`;
+  }
+
   el.innerHTML = `
     <div class="sig-section">
       <div class="sig-section-title">📡 スキャン結果 — ${items.length}銘柄</div>
       <table class="sig-table scan-table">
         <thead><tr>
-          <th>銘柄</th><th>現在値</th>
-          <th>最終GC</th><th></th>
+          ${thSort('ticker','銘柄')}
+          ${thSort('price','現在値')}
+          ${thSort('gc','最終GC')}
+          <th></th>
         </tr></thead>
         <tbody>${items.map(scanRowHTML).join('')}</tbody>
       </table>
