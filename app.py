@@ -511,20 +511,26 @@ def save_auto_scan_list(stocks):
 
 def fetch_next_earnings(stock) -> str | None:
     """yfinance earnings_dates から次回決算日を取得（JP/US両対応、lxml必要）"""
-    try:
-        ed = stock.earnings_dates
-        if ed is None or ed.empty:
+    for attempt in range(2):
+        try:
+            ed = stock.earnings_dates
+            if ed is None or ed.empty:
+                return None
+            now = pd.Timestamp.now(tz='UTC')
+            # earnings_dates のインデックスはtz-aware; 未来のものだけ残す
+            future = ed[ed.index > now]
+            if future.empty:
+                return None
+            # 最も近い未来日（最小値）を取得
+            next_dt = future.index.min()
+            return pd.Timestamp(next_dt).tz_convert(None).strftime('%Y-%m-%d')
+        except Exception as e:
+            # レート制限エラーのみリトライ（15秒待機）
+            if attempt == 0 and any(kw in str(e) for kw in ['レート', '429', 'Too Many', 'rate']):
+                time.sleep(15)
+                continue
             return None
-        now = pd.Timestamp.now(tz='UTC')
-        # earnings_dates のインデックスはtz-aware; 未来のものだけ残す
-        future = ed[ed.index > now]
-        if future.empty:
-            return None
-        # 最も近い未来日（最小値）を取得
-        next_dt = future.index.min()
-        return pd.Timestamp(next_dt).tz_convert(None).strftime('%Y-%m-%d')
-    except Exception:
-        return None
+    return None
 
 
 def fetch_top_gainers(limit=100):
@@ -616,13 +622,13 @@ def _run_scan_thread():
             if data:
                 results.append(data)
 
-    # 決算日を順次取得（レート制限対策: 並列にせず0.3秒間隔）
+    # 決算日を順次取得（レート制限対策: 1.5秒間隔）
     for r in results:
         try:
             r['next_earnings'] = fetch_next_earnings(yf.Ticker(normalize_ticker(r['ticker'])))
         except Exception:
             pass
-        time.sleep(0.3)
+        time.sleep(1.5)
 
     updated_at = time.time()
     if SUPABASE_URL and SUPABASE_KEY:
