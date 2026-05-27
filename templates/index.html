@@ -474,6 +474,18 @@ header {
 .scan-th-sort:hover { color: var(--text); }
 .scan-th-sort.sort-active { color: var(--blue); }
 .sort-arrow { font-size: 9px; margin-left: 2px; opacity: .7; }
+/* シグナルバッジ クリック */
+.scan-sig-badge {
+  cursor: pointer; transition: opacity .15s;
+}
+.scan-sig-badge:hover { opacity: .75; }
+/* デスクトップでチャートを広く */
+@media (min-width: 600px) {
+  .scan-inline-chart { flex: 0 0 160px; }
+}
+@media (min-width: 1024px) {
+  .scan-inline-chart { flex: 0 0 220px; }
+}
 .scan-gc-cell { white-space: nowrap; }
 /* スキャン専用テーブル調整 */
 .scan-table th:last-child { width: 1px; }
@@ -1622,7 +1634,7 @@ function renderScanView() {
             </div>
             <div class="sig-ticker-row">
               <span class="sig-ticker">${d.ticker}</span>
-              <span class="badge ${cfg.cls}" style="font-size:9px;padding:1px 5px;margin-left:4px">${cfg.lbl}</span>
+              <span class="badge ${cfg.cls} scan-sig-badge" onclick="setScanSort('signal')" title="シグナルでソート" style="font-size:9px;padding:1px 5px;margin-left:4px">${cfg.lbl}</span>
             </div>
           </div>
           ${chart}
