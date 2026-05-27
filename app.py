@@ -268,29 +268,8 @@ def scan_stock_data(ticker: str) -> dict:
     macd_hist_full = (macd - sig).fillna(0)
     chart_macd_hist = [round(float(v), 6) for v in macd_hist_full.iloc[-chart_n:].tolist()]
 
-    # 次回決算日
-    next_earnings = None
-    try:
-        cal = stock.calendar
-        dates = None
-        if isinstance(cal, dict) and cal:
-            raw = cal.get('Earnings Date')
-            if isinstance(raw, list) and raw:
-                dates = raw[0]
-            elif raw is not None:
-                dates = raw
-        elif hasattr(cal, 'empty') and not cal.empty:
-            # DataFrame形式 (旧yfinance)
-            if 'Earnings Date' in cal.columns:
-                dates = cal['Earnings Date'].iloc[0]
-        if dates is not None:
-            ts = pd.Timestamp(dates)
-            if ts.tzinfo is not None:
-                ts = ts.tz_convert(None)
-            if ts > pd.Timestamp.now():
-                next_earnings = ts.strftime('%Y-%m-%d')
-    except Exception:
-        pass
+    # 次回決算日（JP/US共通: yfinance earnings_dates、lxml必要）
+    next_earnings = fetch_next_earnings(stock)
 
     return {
         'ticker':          disp,
@@ -531,6 +510,24 @@ def load_auto_scan_list():
 def save_auto_scan_list(stocks):
     if SUPABASE_URL and SUPABASE_KEY:
         _sb_save('auto_scan_list', {'stocks': stocks, 'updated_at': time.time()})
+
+
+def fetch_next_earnings(stock) -> str | None:
+    """yfinance earnings_dates から次回決算日を取得（JP/US両対応、lxml必要）"""
+    try:
+        ed = stock.earnings_dates
+        if ed is None or ed.empty:
+            return None
+        now = pd.Timestamp.now(tz='UTC')
+        # earnings_dates のインデックスはtz-aware; 未来のものだけ残す
+        future = ed[ed.index > now]
+        if future.empty:
+            return None
+        # 最も近い未来日（最小値）を取得
+        next_dt = future.index.min()
+        return pd.Timestamp(next_dt).tz_convert(None).strftime('%Y-%m-%d')
+    except Exception:
+        return None
 
 
 def fetch_top_gainers(limit=100):
