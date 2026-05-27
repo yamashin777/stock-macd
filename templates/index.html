@@ -466,6 +466,15 @@ header {
   flex: 0 0 110px; background: var(--bg3);
   border-radius: 3px; overflow: hidden; line-height: 0;
 }
+.sig-ticker-row { display: flex; align-items: center; margin-top: 2px; }
+.scan-gc-cell { white-space: nowrap; }
+/* スキャン専用テーブル調整 */
+.scan-table th:last-child { width: 1px; }
+.scan-table td:nth-child(2) { white-space: nowrap; }
+@media (max-width: 600px) {
+  .scan-table thead { display: none; }
+  .scan-inline-chart { flex: 0 0 80px; }
+}
 
 /* ── 外部リンク ──────────────────────────────────── */
 a.card-name {
@@ -1555,7 +1564,7 @@ function renderScanView() {
     const inWL = wl.has(d.ticker);
     const gcAgo = monthsAgo(d.last_gc);
     const gcCell = d.last_gc
-      ? `<span class="sig-date-gc">${d.last_gc}</span><span class="sig-months-ago">(${gcAgo}ヶ月前)</span>`
+      ? `<span class="sig-date-gc">${d.last_gc}</span><br><span class="sig-months-ago">${gcAgo}M前</span>`
       : '<span class="sig-date-none">—</span>';
     const addBtn = inWL
       ? `<span class="in-wl-badge">✓ 登録済</span>`
@@ -1573,15 +1582,17 @@ function renderScanView() {
               <a class="ext-link" style="font-size:11px;margin-right:4px" href="${extUrl}" target="_blank" rel="noopener noreferrer">↗</a>
               ${escapeHtml(displayName)}
             </div>
-            <div class="sig-ticker">${d.ticker}</div>
+            <div class="sig-ticker-row">
+              <span class="sig-ticker">${d.ticker}</span>
+              <span class="badge ${cfg.cls}" style="font-size:9px;padding:1px 5px;margin-left:4px">${cfg.lbl}</span>
+            </div>
           </div>
           ${chart}
         </div>
       </td>
-      <td><span class="badge ${cfg.cls}" style="font-size:10px;padding:2px 8px">${cfg.lbl}</span></td>
       <td class="sig-price">${s}${fmtPrice(d.current_price, d.currency)}<br>
         <span class="${cc}" style="font-size:11px">${sgn}${d.change_pct.toFixed(2)}%</span></td>
-      <td>${gcCell}</td>
+      <td class="scan-gc-cell">${gcCell}</td>
       <td>${addBtn}</td>
     </tr>`;
   }
@@ -1589,10 +1600,10 @@ function renderScanView() {
   el.innerHTML = `
     <div class="sig-section">
       <div class="sig-section-title">📡 スキャン結果 — ${items.length}銘柄</div>
-      <table class="sig-table">
+      <table class="sig-table scan-table">
         <thead><tr>
-          <th>銘柄</th><th>シグナル</th><th>現在値</th>
-          <th>最終GC（買い）</th><th>ウォッチリスト</th>
+          <th>銘柄</th><th>現在値</th>
+          <th>最終GC</th><th></th>
         </tr></thead>
         <tbody>${items.map(scanRowHTML).join('')}</tbody>
       </table>
