@@ -493,7 +493,7 @@ def update_metadata(ticker):
 
 # ── スキャン バックグラウンドスレッド管理 ─────────────────────────────────────
 _scan_lock  = threading.Lock()
-_scan_state = {'status': 'idle', 'results': None, 'updated_at': 0}
+_scan_state = {'status': 'idle', 'results': None, 'updated_at': 0, 'phase': ''}
 
 def load_auto_scan_list():
     """Supabaseから自動取得済み値上がり銘柄リストを返す (stocks, updated_at)"""
@@ -612,6 +612,8 @@ def _invalidate_scan_cache():
 
 
 def _run_scan_thread():
+    with _scan_lock:
+        _scan_state['phase'] = 'prices'
     all_stocks, _ = load_scan_list()
     results = []
     def safe(t):
@@ -623,21 +625,30 @@ def _run_scan_thread():
                 results.append(data)
 
     # 並列スキャン直後はレート制限リセット待ち（90秒クールダウン）
+    with _scan_lock:
+        _scan_state['phase'] = 'cooldown'
     time.sleep(90)
 
     # 決算日を順次取得（レート制限対策: 2秒間隔）
+    with _scan_lock:
+        _scan_state['phase'] = 'earnings'
+    earnings_ok = 0
     for r in results:
         try:
-            r['next_earnings'] = fetch_next_earnings(yf.Ticker(normalize_ticker(r['ticker'])))
+            e = fetch_next_earnings(yf.Ticker(normalize_ticker(r['ticker'])))
+            r['next_earnings'] = e
+            if e:
+                earnings_ok += 1
         except Exception:
             pass
         time.sleep(2)
 
+    print(f'[scan] 決算日取得: {earnings_ok}/{len(results)}件')
     updated_at = time.time()
     if SUPABASE_URL and SUPABASE_KEY:
         _sb_save('scan_cache', {'results': results, 'updated_at': updated_at})
     with _scan_lock:
-        _scan_state.update({'status': 'done', 'results': results, 'updated_at': updated_at})
+        _scan_state.update({'status': 'done', 'phase': 'done', 'results': results, 'updated_at': updated_at})
 
 
 @app.route('/api/scan')
@@ -828,6 +839,39 @@ def debug_one_earnings(ticker):
     except Exception as e:
         result['error'] = str(e)
     return jsonify(result)
+
+
+@app.route('/api/debug/scan-status')
+def debug_scan_status():
+    """一時デバッグ: スキャン進行フェーズとキャッシュ内の決算日を確認"""
+    with _scan_lock:
+        state = dict(_scan_state)
+
+    earnings_sample = []
+    earnings_count = 0
+    if state.get('results'):
+        for r in state['results'][:5]:
+            earnings_sample.append({'ticker': r['ticker'], 'next_earnings': r.get('next_earnings')})
+        earnings_count = sum(1 for r in state['results'] if r.get('next_earnings'))
+
+    # Supabaseキャッシュも確認
+    sb_earnings_count = 0
+    sb_updated_at = None
+    if SUPABASE_URL and SUPABASE_KEY:
+        cached = _sb_load('scan_cache')
+        if cached and cached.get('results'):
+            sb_earnings_count = sum(1 for r in cached['results'] if r.get('next_earnings'))
+            sb_updated_at = cached.get('updated_at')
+
+    return jsonify({
+        'scan_status':      state.get('status'),
+        'scan_phase':       state.get('phase'),
+        'memory_total':     len(state['results']) if state.get('results') else 0,
+        'memory_earnings':  earnings_count,
+        'memory_sample':    earnings_sample,
+        'supabase_earnings': sb_earnings_count,
+        'supabase_updated_at': sb_updated_at,
+    })
 
 
 if __name__ == '__main__':
