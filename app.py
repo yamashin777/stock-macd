@@ -268,9 +268,6 @@ def scan_stock_data(ticker: str) -> dict:
     macd_hist_full = (macd - sig).fillna(0)
     chart_macd_hist = [round(float(v), 6) for v in macd_hist_full.iloc[-chart_n:].tolist()]
 
-    # 次回決算日（JP/US共通: yfinance earnings_dates、lxml必要）
-    next_earnings = fetch_next_earnings(stock)
-
     return {
         'ticker':          disp,
         'symbol':          symbol,
@@ -287,7 +284,7 @@ def scan_stock_data(ticker: str) -> dict:
         'memo':            '',
         'chart_close':     chart_close,
         'chart_macd_hist': chart_macd_hist,
-        'next_earnings':   next_earnings,
+        'next_earnings':   None,  # _run_scan_thread で順次取得
     }
 
 
@@ -618,6 +615,15 @@ def _run_scan_thread():
         for data in ex.map(safe, all_stocks):
             if data:
                 results.append(data)
+
+    # 決算日を順次取得（レート制限対策: 並列にせず0.3秒間隔）
+    for r in results:
+        try:
+            r['next_earnings'] = fetch_next_earnings(yf.Ticker(normalize_ticker(r['ticker'])))
+        except Exception:
+            pass
+        time.sleep(0.3)
+
     updated_at = time.time()
     if SUPABASE_URL and SUPABASE_KEY:
         _sb_save('scan_cache', {'results': results, 'updated_at': updated_at})
@@ -788,47 +794,6 @@ def get_stock(ticker):
     except Exception as e:
         return jsonify({'error': f'データ取得エラー: {e}'}), 500
 
-
-@app.route('/api/debug/earnings')
-def debug_earnings():
-    """一時デバッグ用: lxml確認 + 代表銘柄の決算日取得テスト"""
-    # lxml インストール確認
-    try:
-        import lxml
-        lxml_version = lxml.__version__
-        lxml_ok = True
-    except ImportError as e:
-        lxml_version = None
-        lxml_ok = False
-        lxml_error = str(e)
-
-    # テスト銘柄: トヨタ(JP) + Apple(US)
-    test_results = {}
-    for ticker in ['7203.T', 'AAPL']:
-        try:
-            stock = yf.Ticker(ticker)
-            ed = stock.earnings_dates
-            if ed is None or ed.empty:
-                test_results[ticker] = {'status': 'empty', 'next_earnings': None}
-            else:
-                now = pd.Timestamp.now(tz='UTC')
-                future = ed[ed.index > now]
-                next_dt = future.index.min() if not future.empty else None
-                test_results[ticker] = {
-                    'status': 'ok',
-                    'total_rows': len(ed),
-                    'future_rows': len(future),
-                    'next_earnings': pd.Timestamp(next_dt).tz_convert(None).strftime('%Y-%m-%d') if next_dt else None,
-                }
-        except Exception as e:
-            test_results[ticker] = {'status': 'error', 'error': str(e)}
-
-    return jsonify({
-        'lxml_installed': lxml_ok,
-        'lxml_version': lxml_version,
-        'lxml_error': None if lxml_ok else lxml_error,
-        'earnings_test': test_results,
-    })
 
 
 if __name__ == '__main__':
