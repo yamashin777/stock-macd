@@ -458,35 +458,6 @@ header {
   border: 1px solid var(--border); padding: 3px 8px; border-radius: 5px;
   white-space: nowrap;
 }
-/* ── スキャンカードグリッド ─────────────────────────── */
-.scan-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
-  gap: 8px;
-}
-.scan-card {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 10px 8px;
-  display: flex; flex-direction: column; gap: 6px;
-  transition: border-color .15s;
-}
-.scan-card:hover { border-color: var(--blue); }
-.scan-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; }
-.scan-card-name {
-  font-size: 12px; font-weight: 600; color: var(--text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95px;
-}
-.scan-card-ticker { font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
-.scan-card-chart { width: 100%; line-height: 0; border-radius: 4px; overflow: hidden; }
-.scan-card-price { font-size: 13px; font-weight: 700; color: var(--text); }
-.scan-card-chg   { font-size: 11px; }
-.scan-card-gc    { font-size: 10px; color: var(--muted); }
-.scan-card-gc .sig-date-gc { font-size: 10px; }
-.scan-card-bottom { display: flex; justify-content: space-between; align-items: center; }
-@media (max-width: 480px) {
-  .scan-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
-  .scan-card { padding: 8px 8px 6px; }
-}
 
 /* ── 外部リンク ──────────────────────────────────── */
 a.card-name {
@@ -1566,7 +1537,7 @@ function renderScanView() {
     return;
   }
 
-  function scanCardHTML(d) {
+  function scanRowHTML(d) {
     const s = sym(d.currency);
     const cc = d.change >= 0 ? 'pos' : 'neg';
     const sgn = d.change >= 0 ? '+' : '';
@@ -1575,43 +1546,44 @@ function renderScanView() {
     const extUrl = externalUrl(d.symbol, d.ticker);
     const inWL = wl.has(d.ticker);
     const gcAgo = monthsAgo(d.last_gc);
-    const gcLabel = d.last_gc
-      ? `<span class="sig-date-gc">${d.last_gc}</span><span class="sig-months-ago"> (${gcAgo}M)</span>`
-      : '<span class="sig-date-none">GC—</span>';
+    const gcCell = d.last_gc
+      ? `<span class="sig-date-gc">${d.last_gc}</span><span class="sig-months-ago">(${gcAgo}ヶ月前)</span>`
+      : '<span class="sig-date-none">—</span>';
     const addBtn = inWL
       ? `<span class="in-wl-badge">✓ 登録済</span>`
       : `<button class="btn-add-wl" id="scan-add-${d.ticker}" onclick="scanAddToWL(event,'${d.ticker}')">＋ 追加</button>`;
 
-    // カード幅に合わせたSVGサイズ（CSSで100%表示）
-    const chart = sparklineSVG(d.chart_close, d.chart_macd_hist, 140, 52);
+    const chart = d.chart_close
+      ? `<div style="margin-top:4px;background:var(--bg3);border-radius:3px;overflow:hidden">${sparklineSVG(d.chart_close, d.chart_macd_hist, 140, 44)}</div>`
+      : '';
 
-    return `<div class="scan-card">
-      <div class="scan-card-top">
-        <div style="min-width:0">
-          <div class="scan-card-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
-          <div class="scan-card-ticker">
-            ${d.ticker}
-            <a class="ext-link" href="${extUrl}" target="_blank" rel="noopener noreferrer" style="font-size:10px">↗</a>
-          </div>
+    return `<tr>
+      <td>
+        <div class="sig-name">
+          <a class="ext-link" style="font-size:11px;margin-right:4px" href="${extUrl}" target="_blank" rel="noopener noreferrer">↗</a>
+          ${escapeHtml(displayName)}
         </div>
-        <span class="badge ${cfg.cls}" style="font-size:9px;padding:2px 6px;white-space:nowrap;flex-shrink:0">${cfg.lbl}</span>
-      </div>
-      <div class="scan-card-chart" style="background:var(--bg3);border-radius:4px">${chart}</div>
-      <div>
-        <span class="scan-card-price">${s}${fmtPrice(d.current_price, d.currency)}</span>
-        <span class="scan-card-chg ${cc}" style="margin-left:4px">${sgn}${d.change_pct.toFixed(2)}%</span>
-      </div>
-      <div class="scan-card-bottom">
-        <div class="scan-card-gc">${gcLabel}</div>
-        ${addBtn}
-      </div>
-    </div>`;
+        <div class="sig-ticker">${d.ticker}</div>
+        ${chart}
+      </td>
+      <td><span class="badge ${cfg.cls}" style="font-size:10px;padding:2px 8px">${cfg.lbl}</span></td>
+      <td class="sig-price">${s}${fmtPrice(d.current_price, d.currency)}<br>
+        <span class="${cc}" style="font-size:11px">${sgn}${d.change_pct.toFixed(2)}%</span></td>
+      <td>${gcCell}</td>
+      <td>${addBtn}</td>
+    </tr>`;
   }
 
   el.innerHTML = `
     <div class="sig-section">
       <div class="sig-section-title">📡 スキャン結果 — ${items.length}銘柄</div>
-      <div class="scan-grid">${items.map(scanCardHTML).join('')}</div>
+      <table class="sig-table">
+        <thead><tr>
+          <th>銘柄</th><th>シグナル</th><th>現在値</th>
+          <th>最終GC（買い）</th><th>ウォッチリスト</th>
+        </tr></thead>
+        <tbody>${items.map(scanRowHTML).join('')}</tbody>
+      </table>
     </div>`;
 }
 
