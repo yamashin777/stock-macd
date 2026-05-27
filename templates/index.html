@@ -1522,7 +1522,7 @@ function sparklineSVG(closes, macdHist, w, h) {
   // 仕切り線
   const divY = (pH + gap / 2).toFixed(1);
 
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block">
+  return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
     <path d="${fillPath}" fill="${fillCol}"/>
     <polyline points="${pts}" fill="none" stroke="${lineCol}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
     <line x1="0" y1="${divY}" x2="${w}" y2="${divY}" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>
