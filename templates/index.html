@@ -1417,7 +1417,7 @@ let scanFilter  = 'gc3';
 let scanSortKey = 'gc';   // 'gc' | 'ticker' | 'price' | 'change' | 'signal'
 let scanSortDir = -1;     // -1=降順, 1=昇順
 
-const SIGNAL_ORDER = { '買い':0, '上昇トレンド':1, '様子見':2, '下降トレンド':3, '売り':4 };
+const SCAN_SIG_RANK = { '買い':0, '上昇トレンド':1, '様子見':2, '下降トレンド':3, '売り':4 };
 
 function setScanSort(key) {
   if (scanSortKey === key) {
@@ -1580,8 +1580,8 @@ function renderScanView() {
       va = a.change_pct; vb = b.change_pct;
       return scanSortDir * (va - vb);
     } else if (scanSortKey === 'signal') {
-      va = SIGNAL_ORDER[a.signal] ?? 5;
-      vb = SIGNAL_ORDER[b.signal] ?? 5;
+      va = SCAN_SIG_RANK[a.signal] ?? 5;
+      vb = SCAN_SIG_RANK[b.signal] ?? 5;
       return scanSortDir * (va - vb);
     }
     return 0;
