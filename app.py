@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import json
 import time
+import gc
 import threading
 import requests as http_requests
 from datetime import datetime, timedelta
@@ -641,6 +642,7 @@ def _run_scan_thread():
                 earnings_ok += 1
         except Exception:
             pass
+        gc.collect()  # pd.read_html() のメモリを都度解放
         time.sleep(2)
 
     print(f'[scan] 決算日取得: {earnings_ok}/{len(results)}件')
