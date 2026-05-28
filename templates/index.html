@@ -491,13 +491,18 @@ header {
 @media (min-width: 600px) {
   .scan-earn-th, .scan-earn-td { display: table-cell; }
 }
-.earn-soon { color: #f0a000; font-weight: 700; }   /* 30日以内 */
-.earn-imminent { color: #f85149; font-weight: 700; } /* 7日以内 */
+.earn-moderate { color: #c49a2a; font-weight: 600; }   /* 60日以内 */
+.earn-soon     { color: #f0a000; font-weight: 700; }   /* 30日以内 */
+.earn-imminent { color: #f85149; font-weight: 700; }   /* 7日以内 */
 .scan-gc-cell { white-space: nowrap; }
-/* スキャン専用テーブル調整 */
-.scan-table th:last-child { width: 1px; }
-.scan-table td:nth-child(2) { white-space: nowrap; }
+/* スキャン専用テーブル — colgroup で列幅固定 */
+.scan-table { table-layout: fixed; width: 100%; }
+.scan-table .scan-price-th, .scan-table .sig-price    { text-align: right;  white-space: nowrap; }
+.scan-table .scan-gc-th,    .scan-table .scan-gc-cell  { text-align: center; white-space: nowrap; }
+.scan-table .scan-earn-th,  .scan-table .scan-earn-td  { text-align: center; white-space: nowrap; }
+.scan-table th:last-child,  .scan-table td:last-child   { text-align: center; }
 @media (max-width: 600px) {
+  .scan-table { table-layout: auto; }
   .scan-table thead { display: none; }
   .scan-inline-chart { flex: 0 0 80px; }
 }
@@ -1423,6 +1428,9 @@ function switchTab(tab) {
   document.getElementById('signal-view').classList.toggle('hidden', tab !== 'signal');
   document.getElementById('scan-view').classList.toggle('hidden', tab !== 'scan');
 
+  // リロード時にタブを復元できるようハッシュを保存
+  history.replaceState(null, '', tab === 'watch' ? location.pathname : '#' + tab);
+
   if (tab === 'signal') renderSignalView();
   if (tab === 'scan') {
     loadScanList();
@@ -1644,8 +1652,8 @@ function renderScanView() {
       const eDate = new Date(d.next_earnings); eDate.setHours(0,0,0,0);
       const days  = Math.round((eDate - today) / 86400000);
       if (days >= 0) {
-        const cls  = days <= 7 ? 'earn-imminent' : days <= 30 ? 'earn-soon' : '';
-        const label = days === 0 ? '本日' : `${days}日`;
+        const cls  = days <= 7 ? 'earn-imminent' : days <= 30 ? 'earn-soon' : days <= 60 ? 'earn-moderate' : '';
+        const label = days === 0 ? '本日' : `${days}日後`;
         earnCell = `<span class="${cls}">${label}</span><br><span style="font-size:10px;color:var(--muted)">${d.next_earnings.slice(5)}</span>`;
       }
     }
@@ -1686,10 +1694,17 @@ function renderScanView() {
     <div class="sig-section">
       <div class="sig-section-title">📡 スキャン結果 — ${items.length}銘柄</div>
       <table class="sig-table scan-table">
+        <colgroup>
+          <col>
+          <col style="width:100px">
+          <col style="width:88px">
+          <col style="width:72px">
+          <col style="width:74px">
+        </colgroup>
         <thead><tr>
           ${thSort('ticker','銘柄')}
-          ${thSort('price','現在値')}
-          ${thSort('gc','最終GC')}
+          ${thSort('price','現在値','scan-price-th')}
+          ${thSort('gc','最終GC','scan-gc-th')}
           ${thSort('earnings','決算', 'scan-earn-th')}
           <th></th>
         </tr></thead>
@@ -1833,6 +1848,10 @@ async function scanListRemove(ticker) {
 document.addEventListener('DOMContentLoaded', () => {
   const inp = document.getElementById('scan-add-input');
   if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') scanListAdd(); });
+
+  // リロード時: URLハッシュからタブを復元
+  const initTab = location.hash.replace('#', '');
+  if (['signal', 'scan'].includes(initTab)) switchTab(initTab);
 });
 
 async function scanAddToWL(e, ticker) {
