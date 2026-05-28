@@ -851,10 +851,29 @@ def get_stock(ticker):
 
 @app.route('/api/debug/earnings/<ticker>')
 def debug_one_earnings(ticker):
-    """一時デバッグ: 1銘柄の決算日取得テスト（JSON API）"""
+    """一時デバッグ: 1銘柄の決算日取得テスト（生レスポンス付き）"""
     symbol = normalize_ticker(ticker)
     result = {'symbol': symbol}
     try:
+        # JSON API の生レスポンスを確認
+        r = http_requests.get(
+            f'https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}',
+            params={'modules': 'calendarEvents'},
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
+            timeout=10,
+        )
+        result['status_code'] = r.status_code
+        data = r.json()
+        result['raw_top'] = str(data)[:600]
+
+        # yfinance calendar も並行確認
+        stock = yf.Ticker(symbol)
+        try:
+            cal = stock.calendar
+            result['calendar'] = str(cal)[:300] if cal is not None else 'None'
+        except Exception as e2:
+            result['calendar_error'] = str(e2)
+
         result['next_earnings'] = fetch_next_earnings(symbol)
     except Exception as e:
         result['error'] = str(e)
