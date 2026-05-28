@@ -856,29 +856,30 @@ def get_stock(ticker):
 
 @app.route('/api/debug/earnings/<ticker>')
 def debug_one_earnings(ticker):
-    """一時デバッグ: 1銘柄の決算日取得テスト（生レスポンス付き）"""
+    """一時デバッグ: calendar パース確認"""
     symbol = normalize_ticker(ticker)
     result = {'symbol': symbol}
     try:
-        # JSON API の生レスポンスを確認
-        r = http_requests.get(
-            f'https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}',
-            params={'modules': 'calendarEvents'},
-            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
-            timeout=10,
-        )
-        result['status_code'] = r.status_code
-        data = r.json()
-        result['raw_top'] = str(data)[:600]
-
-        # yfinance calendar も並行確認
         stock = yf.Ticker(symbol)
-        try:
-            cal = stock.calendar
-            result['calendar'] = str(cal)[:300] if cal is not None else 'None'
-        except Exception as e2:
-            result['calendar_error'] = str(e2)
-
+        cal = stock.calendar
+        result['cal_type']  = str(type(cal))
+        result['cal_bool']  = bool(cal) if cal is not None else None
+        result['cal_keys']  = list(cal.keys()) if isinstance(cal, dict) else None
+        dates = cal.get('Earnings Date', []) if isinstance(cal, dict) else []
+        result['dates_raw'] = str(dates)
+        today = datetime.now().date()
+        result['today'] = str(today)
+        parsed = []
+        for d in (dates if isinstance(dates, list) else [dates]):
+            try:
+                if hasattr(d, 'strftime'):
+                    parsed.append({'val': str(d), 'future': d > today})
+                else:
+                    ts = pd.Timestamp(d)
+                    parsed.append({'val': str(ts), 'future': ts.date() > today})
+            except Exception as pe:
+                parsed.append({'error': str(pe)})
+        result['parsed_dates'] = parsed
         result['next_earnings'] = fetch_next_earnings(symbol)
     except Exception as e:
         result['error'] = str(e)
