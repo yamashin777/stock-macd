@@ -520,28 +520,29 @@ def save_auto_scan_list(stocks):
         _sb_save('auto_scan_list', {'stocks': stocks, 'updated_at': time.time()})
 
 
-def fetch_next_earnings(stock) -> str | None:
-    """yfinance earnings_dates から次回決算日を取得（JP/US両対応、lxml必要）"""
-    for attempt in range(2):
-        try:
-            ed = stock.earnings_dates
-            if ed is None or ed.empty:
-                return None
-            now = pd.Timestamp.now(tz='UTC')
-            # earnings_dates のインデックスはtz-aware; 未来のものだけ残す
-            future = ed[ed.index > now]
-            if future.empty:
-                return None
-            # 最も近い未来日（最小値）を取得
-            next_dt = future.index.min()
-            return pd.Timestamp(next_dt).tz_convert(None).strftime('%Y-%m-%d')
-        except Exception as e:
-            # レート制限エラーのみリトライ（15秒待機）
-            if attempt == 0 and any(kw in str(e) for kw in ['レート', '429', 'Too Many', 'rate']):
-                time.sleep(15)
-                continue
+def fetch_next_earnings(symbol: str) -> str | None:
+    """Yahoo Finance quoteSummary JSON APIから次回決算日を取得（HTML解析不要・軽量）"""
+    try:
+        r = http_requests.get(
+            f'https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}',
+            params={'modules': 'calendarEvents'},
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
+            timeout=10,
+        )
+        result = r.json().get('quoteSummary', {}).get('result')
+        if not result:
             return None
-    return None
+        dates = result[0].get('calendarEvents', {}).get('earnings', {}).get('earningsDate', [])
+        now = pd.Timestamp.now()
+        for d in dates:
+            raw = d.get('raw')
+            if raw:
+                ts = pd.Timestamp(raw, unit='s')
+                if ts > now:
+                    return ts.strftime('%Y-%m-%d')
+        return None
+    except Exception:
+        return None
 
 
 def fetch_top_gainers(limit=100):
@@ -661,7 +662,7 @@ def _run_scan_thread():
     earnings_ok = 0
     for r in earnings_targets:
         try:
-            e = fetch_next_earnings(yf.Ticker(normalize_ticker(r['ticker'])))
+            e = fetch_next_earnings(normalize_ticker(r['ticker']))
             r['next_earnings'] = e
             if e:
                 earnings_ok += 1
@@ -850,21 +851,11 @@ def get_stock(ticker):
 
 @app.route('/api/debug/earnings/<ticker>')
 def debug_one_earnings(ticker):
-    """一時デバッグ: 1銘柄の決算日取得テスト"""
+    """一時デバッグ: 1銘柄の決算日取得テスト（JSON API）"""
     symbol = normalize_ticker(ticker)
     result = {'symbol': symbol}
     try:
-        stock = yf.Ticker(symbol)
-        ed = stock.earnings_dates
-        if ed is None:
-            result['earnings_dates'] = 'None'
-        elif ed.empty:
-            result['earnings_dates'] = 'empty'
-        else:
-            now = pd.Timestamp.now(tz='UTC')
-            future = ed[ed.index > now]
-            result['earnings_dates'] = f'{len(ed)} rows, {len(future)} future'
-            result['next_earnings'] = fetch_next_earnings(stock)
+        result['next_earnings'] = fetch_next_earnings(symbol)
     except Exception as e:
         result['error'] = str(e)
     return jsonify(result)
