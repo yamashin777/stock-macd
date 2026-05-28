@@ -521,25 +521,30 @@ def save_auto_scan_list(stocks):
 
 
 def fetch_next_earnings(symbol: str) -> str | None:
-    """Yahoo Finance quoteSummary JSON APIから次回決算日を取得（HTML解析不要・軽量）"""
+    """yfinance calendar から次回決算日を取得（認証を内部処理・軽量）"""
     try:
-        r = http_requests.get(
-            f'https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}',
-            params={'modules': 'calendarEvents'},
-            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
-            timeout=10,
-        )
-        result = r.json().get('quoteSummary', {}).get('result')
-        if not result:
+        stock = yf.Ticker(symbol)
+        cal = stock.calendar
+        if not cal:
             return None
-        dates = result[0].get('calendarEvents', {}).get('earnings', {}).get('earningsDate', [])
-        now = pd.Timestamp.now()
-        for d in dates:
-            raw = d.get('raw')
-            if raw:
-                ts = pd.Timestamp(raw, unit='s')
-                if ts > now:
-                    return ts.strftime('%Y-%m-%d')
+        dates = cal.get('Earnings Date', [])
+        if not isinstance(dates, list):
+            dates = [dates] if dates else []
+        today = datetime.now().date()
+        for d in sorted(dates):
+            try:
+                # datetime.date オブジェクトの場合
+                if hasattr(d, 'strftime'):
+                    if d > today:
+                        return d.strftime('%Y-%m-%d')
+                else:
+                    ts = pd.Timestamp(d)
+                    if ts.tzinfo:
+                        ts = ts.tz_convert(None)
+                    if ts.date() > today:
+                        return ts.strftime('%Y-%m-%d')
+            except Exception:
+                pass
         return None
     except Exception:
         return None
