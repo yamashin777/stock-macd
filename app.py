@@ -870,7 +870,7 @@ MACD値: {macd_val:+.4f}
     try:
         url  = (
             'https://generativelanguage.googleapis.com/v1beta/models/'
-            f'gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}'
+            f'gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}'
         )
         resp = http_requests.post(
             url,
@@ -884,6 +884,11 @@ MACD値: {macd_val:+.4f}
             text = resp.json()['candidates'][0]['content']['parts'][0]['text']
             _ai_cache[ticker] = {'text': text, 'ts': time.time()}
             return jsonify({'comment': text})
+        elif resp.status_code == 429:
+            return jsonify({'error': (
+                'APIの利用制限に達しました（1分15回・1日1,500回まで）。\n'
+                'しばらく待ってから再度お試しください。'
+            )}), 429
         else:
             return jsonify({'error': f'Gemini API エラー ({resp.status_code}): {resp.text[:200]}'}), 502
     except Exception as e:
