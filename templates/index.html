@@ -1169,18 +1169,18 @@ function renderDetail(data) {
         <div class="stat-val ${hc}">${data.histogram_value >= 0 ? '+' : ''}${data.histogram_value.toFixed(4)}</div></div>
     </div>
 
+    <div class="ai-section" id="ai-section">
+      <div class="ai-section-hd">
+        <div class="ai-section-lbl">🤖 AI解説（月足MACDトレンド分析）</div>
+        <button class="btn-ai" id="btn-ai-fetch" onclick="fetchAiComment()" style="display:none">↻ 再取得</button>
+      </div>
+      <div class="ai-comment-box loading" id="ai-comment-box">🤖 AIが月足MACDデータを分析中です…</div>
+    </div>
+
     <div class="detail-memo-hd">
       <div class="detail-memo-lbl">メモ</div>
     </div>
     <div class="detail-memo">${data.memo ? linkifyMemo(data.memo) : '<span style="opacity:.4">メモなし — ✎ 編集から追加できます</span>'}</div>
-
-    <div class="ai-section" id="ai-section">
-      <div class="ai-section-hd">
-        <div class="ai-section-lbl">🤖 AI解説（月足MACDトレンド分析）</div>
-        <button class="btn-ai" id="btn-ai-fetch" onclick="fetchAiComment()">解説を取得</button>
-      </div>
-      <div class="ai-comment-box" id="ai-comment-box" style="display:none"></div>
-    </div>
 
     <div class="period-bar">
       <span class="period-lbl">表示期間:</span>
@@ -1203,19 +1203,19 @@ function renderDetail(data) {
 
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   drawCharts(data);
+  fetchAiComment();   // パネル表示と同時にAI解説を自動取得
 }
 
 // ── AI解説 ─────────────────────────────────────────────────────────────────
 async function fetchAiComment() {
   const box = document.getElementById('ai-comment-box');
   const btn = document.getElementById('btn-ai-fetch');
-  if (!box || !btn || !detailData) return;
+  if (!box || !detailData) return;
 
-  btn.disabled = true;
-  btn.textContent = '取得中…';
-  box.style.display = 'block';
+  // ローディング表示
   box.className = 'ai-comment-box loading';
   box.textContent = '🤖 AIが月足MACDデータを分析中です…';
+  if (btn) { btn.style.display = 'none'; btn.disabled = true; }
 
   try {
     const res  = await fetch('/api/ai-comment', {
@@ -1238,20 +1238,17 @@ async function fetchAiComment() {
     const data = await res.json();
     if (data.comment) {
       box.className = 'ai-comment-box';
-      // 改行を<br>に変換して表示
       box.innerHTML = escapeHtml(data.comment).replace(/\n/g, '<br>');
-      btn.textContent = '↻ 再取得';
     } else {
       box.className = 'ai-comment-box error';
       box.textContent = data.error || 'AI解説の取得に失敗しました';
-      btn.textContent = '解説を取得';
     }
   } catch(err) {
     box.className = 'ai-comment-box error';
     box.textContent = '通信エラーが発生しました。しばらくしてから再試行してください。';
-    btn.textContent = '解説を取得';
   }
-  btn.disabled = false;
+  // 完了後に「↻ 再取得」ボタンを表示
+  if (btn) { btn.style.display = ''; btn.disabled = false; }
 }
 
 // ── Zoom helpers ───────────────────────────────────────────────────────────
