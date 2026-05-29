@@ -381,7 +381,7 @@ DISC_SECTORS = {
 
 SUPABASE_URL       = os.environ.get('SUPABASE_URL', '')
 SUPABASE_KEY       = os.environ.get('SUPABASE_KEY', '')
-ANTHROPIC_API_KEY  = os.environ.get('ANTHROPIC_API_KEY', '')
+GEMINI_API_KEY     = os.environ.get('GEMINI_API_KEY', '')
 
 # ── AI解説キャッシュ（ticker → {text, ts}）──────────────────────────────────
 _ai_cache: dict = {}
@@ -816,34 +816,38 @@ def update_metadata(ticker):
 
 @app.route('/api/ai-comment', methods=['POST'])
 def ai_comment():
-    """ウォッチリスト銘柄のAI解説を生成（Anthropic Claude API使用）"""
-    if not ANTHROPIC_API_KEY:
-        return jsonify({'error': 'ANTHROPIC_API_KEY が環境変数に設定されていません。Renderの環境変数に追加してください。'}), 503
+    """ウォッチリスト銘柄のAI解説を生成（Google Gemini API 無料利用）"""
+    if not GEMINI_API_KEY:
+        return jsonify({'error': (
+            'GEMINI_API_KEY が設定されていません。\n'
+            'https://aistudio.google.com/app/apikey で無料取得し、'
+            'Render の Environment Variables に GEMINI_API_KEY として登録してください。'
+        )}), 503
 
     body   = request.get_json(silent=True) or {}
     ticker = body.get('ticker', '').strip()
     if not ticker:
         return jsonify({'error': 'ticker が指定されていません'}), 400
 
-    # キャッシュ確認
+    # キャッシュ確認（1時間）
     cached = _ai_cache.get(ticker)
     if cached and time.time() - cached['ts'] < _AI_CACHE_TTL:
         return jsonify({'comment': cached['text'], 'cached': True})
 
-    # プロンプト構築（フロントから受け取ったMACDデータを利用）
-    name          = body.get('name', ticker)
-    signal        = body.get('signal', '')
-    macd_val      = body.get('macd_value', 0)
-    sig_val       = body.get('signal_value', 0)
-    hist_val      = body.get('histogram_value', 0)
-    price         = body.get('current_price', 0)
-    change_pct    = body.get('change_pct', 0)
-    currency      = body.get('currency', 'USD')
-    last_gc       = body.get('last_gc') or 'なし'
-    last_dc       = body.get('last_dc') or 'なし'
-    is_jp         = (currency == 'JPY')
-    market_label  = '日本株' if is_jp else '米国株'
-    price_str     = f'{price:,.0f}円' if is_jp else f'${price:.2f}'
+    # プロンプト構築
+    name         = body.get('name', ticker)
+    signal       = body.get('signal', '')
+    macd_val     = body.get('macd_value', 0)
+    sig_val      = body.get('signal_value', 0)
+    hist_val     = body.get('histogram_value', 0)
+    price        = body.get('current_price', 0)
+    change_pct   = body.get('change_pct', 0)
+    currency     = body.get('currency', 'USD')
+    last_gc      = body.get('last_gc') or 'なし'
+    last_dc      = body.get('last_dc') or 'なし'
+    is_jp        = (currency == 'JPY')
+    market_label = '日本株' if is_jp else '米国株'
+    price_str    = f'{price:,.0f}円' if is_jp else f'${price:.2f}'
 
     prompt = f"""あなたは株式市場の専門アナリストです。以下の月足MACDデータを基に、この銘柄の現在の状況と直近の動向を日本語で3〜4文で簡潔に解説してください。
 投資家にとってわかりやすく、具体的な数値や日付を交えて説明してください。
@@ -864,26 +868,24 @@ MACD値: {macd_val:+.4f}
 月足MACDは長期トレンドを示す指標です。上記を踏まえ、トレンドの強さ・方向性・注目すべきポイントを解説してください。"""
 
     try:
+        url  = (
+            'https://generativelanguage.googleapis.com/v1beta/models/'
+            f'gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}'
+        )
         resp = http_requests.post(
-            'https://api.anthropic.com/v1/messages',
-            headers={
-                'x-api-key':          ANTHROPIC_API_KEY,
-                'anthropic-version':  '2023-06-01',
-                'content-type':       'application/json',
-            },
+            url,
             json={
-                'model':      'claude-haiku-4-5',
-                'max_tokens': 600,
-                'messages':   [{'role': 'user', 'content': prompt}],
+                'contents': [{'parts': [{'text': prompt}]}],
+                'generationConfig': {'maxOutputTokens': 600, 'temperature': 0.7},
             },
             timeout=30,
         )
         if resp.status_code == 200:
-            text = resp.json()['content'][0]['text']
+            text = resp.json()['candidates'][0]['content']['parts'][0]['text']
             _ai_cache[ticker] = {'text': text, 'ts': time.time()}
             return jsonify({'comment': text})
         else:
-            return jsonify({'error': f'API エラー ({resp.status_code}): {resp.text[:200]}'}), 502
+            return jsonify({'error': f'Gemini API エラー ({resp.status_code}): {resp.text[:200]}'}), 502
     except Exception as e:
         return jsonify({'error': f'通信エラー: {e}'}), 502
 
