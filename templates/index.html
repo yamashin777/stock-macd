@@ -2099,10 +2099,13 @@ function _renderDiscResults(data) {
       : `<button onclick="discAddToWL(event,'${safeT}')" id="dwl-${safeT}">＋ WL</button>`;
     const gcStr = d.last_gc
       ? `<span style="font-size:10px;color:var(--muted)">GC: ${d.last_gc}</span>` : '';
+    const secStr = d.sector
+      ? `<span style="font-size:10px;background:var(--border);color:var(--fg);padding:1px 6px;border-radius:10px;white-space:nowrap">${escapeHtml(d.sector)}</span>` : '';
     return `<div class="disc-row">
       <div style="flex:1 1 130px">
         <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
           <span class="badge ${cfg.cls}" style="font-size:9px;padding:1px 5px">${cfg.lbl}</span>
+          ${secStr}
           <span class="disc-name">${escapeHtml(d.name || d.ticker)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
@@ -2125,7 +2128,7 @@ function _renderDiscResults(data) {
     for (const d of items) {
       const sec = d.sector || '';
       if (sec && sec !== prevSector) {
-        html += `<div style="font-size:10px;font-weight:600;color:var(--muted);padding:6px 4px 2px;border-bottom:1px solid var(--border);margin-top:${prevSector !== null ? 8 : 0}px;letter-spacing:.04em">${escapeHtml(sec)}</div>`;
+        html += `<div style="font-size:11px;font-weight:700;color:var(--fg);background:var(--border);padding:4px 8px;border-radius:4px;margin-top:${prevSector !== null ? 10 : 2}px;margin-bottom:2px;letter-spacing:.04em">▸ ${escapeHtml(sec)}</div>`;
         prevSector = sec;
       }
       html += discRow(d);
