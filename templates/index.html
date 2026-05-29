@@ -479,7 +479,16 @@ header {
   cursor: pointer; transition: opacity .15s;
 }
 .scan-sig-badge:hover { opacity: .75; }
-/* モバイル用バッジ: デスクトップ非表示 / モバイルでチャート右隣に表示 */
+/* sig-name: 名前行をflexにしてバッジを隣に並べる */
+.scan-name-info .sig-name {
+  display: flex; align-items: center; gap: 4px; overflow: hidden;
+}
+.scan-name-info .sig-name > a.ext-link { flex-shrink: 0; }
+.sig-name-text {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* モバイル: バッジを銘柄名の右隣に表示 / デスクトップ: ティッカー行に表示 */
 .scan-badge-mob { display: none; flex-shrink: 0; }
 @media (max-width: 600px) {
   .scan-badge-desk { display: none !important; }
@@ -1709,7 +1718,8 @@ function renderScanView() {
           <div class="scan-name-info">
             <div class="sig-name">
               <a class="ext-link" style="font-size:11px;margin-right:4px" href="${extUrl}" target="_blank" rel="noopener noreferrer">↗</a>
-              ${escapeHtml(displayName)}
+              <span class="sig-name-text">${escapeHtml(displayName)}</span>
+              <span class="badge ${cfg.cls} scan-sig-badge scan-badge-mob" onclick="setScanSort('signal')" title="シグナルでソート" style="font-size:9px;padding:1px 5px">${cfg.lbl}</span>
             </div>
             <div class="sig-ticker-row">
               <span class="sig-ticker">${d.ticker}</span>
@@ -1717,7 +1727,6 @@ function renderScanView() {
             </div>
           </div>
           ${chart}
-          <span class="badge ${cfg.cls} scan-sig-badge scan-badge-mob" onclick="setScanSort('signal')" title="シグナルでソート" style="font-size:9px;padding:1px 5px">${cfg.lbl}</span>
         </div>
       </td>
       <td class="sig-price">${s}${fmtPrice(d.current_price, d.currency)}<br>
