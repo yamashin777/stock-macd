@@ -901,24 +901,37 @@ MACD値: {macd_val:+.4f}
 
 月足MACDは長期トレンドを示す指標です。上記を踏まえ、トレンドの強さ・方向性・注目すべきポイントを解説してください。"""
 
-    try:
-        url  = (
+    # 利用可能なモデルを順番に試す（404なら次のモデルへ）
+    _GEMINI_MODELS = [
+        'gemini-2.0-flash-lite',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-flash-8b',
+        'gemini-1.5-flash',
+    ]
+    payload = {
+        'contents': [{'parts': [{'text': prompt}]}],
+        'generationConfig': {'maxOutputTokens': 600, 'temperature': 0.7},
+    }
+    last_err = 'モデルが見つかりませんでした'
+    for model in _GEMINI_MODELS:
+        url = (
             'https://generativelanguage.googleapis.com/v1beta/models/'
-            f'gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}'
+            f'{model}:generateContent?key={GEMINI_API_KEY}'
         )
-        resp = http_requests.post(
-            url,
-            json={
-                'contents': [{'parts': [{'text': prompt}]}],
-                'generationConfig': {'maxOutputTokens': 600, 'temperature': 0.7},
-            },
-            timeout=30,
-        )
+        try:
+            resp = http_requests.post(url, json=payload, timeout=30)
+        except Exception as e:
+            return jsonify({'error': f'通信エラー: {e}'}), 502
+
         if resp.status_code == 200:
             text = resp.json()['candidates'][0]['content']['parts'][0]['text']
             _ai_cache[ticker] = {'text': text, 'ts': time.time()}
-            _save_ai_comments(_ai_cache)   # ファイルに永続保存
+            _save_ai_comments(_ai_cache)
             return jsonify({'comment': text})
+        elif resp.status_code == 404:
+            last_err = f'モデル {model} は利用不可'
+            continue   # 次のモデルを試す
         elif resp.status_code == 429:
             return jsonify({'error': (
                 'APIの利用制限に達しました（1分15回・1日1,500回まで）。\n'
@@ -926,8 +939,8 @@ MACD値: {macd_val:+.4f}
             )}), 429
         else:
             return jsonify({'error': f'Gemini API エラー ({resp.status_code}): {resp.text[:200]}'}), 502
-    except Exception as e:
-        return jsonify({'error': f'通信エラー: {e}'}), 502
+
+    return jsonify({'error': f'利用可能なGeminiモデルが見つかりません: {last_err}'}), 502
 
 
 # 発掘スキャン名前辞書をSTOCK_NAMESにマージ
