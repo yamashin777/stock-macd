@@ -78,34 +78,71 @@ STOCK_NAMES = {
 }
 SCAN_CACHE_TTL = 12 * 3600  # 12時間
 
-# ── 日本株発掘スキャン対象（SCAN_STOCKSにない銘柄）────────────────────────────
+# ── 発掘スキャン対象（SCAN_STOCKSにない銘柄）──────────────────────────────────
+# 日本株: 日経225相当 ~120銘柄
 JP_DISCOVERY_STOCKS = [
     # 重工/機械
     '7011', '7012', '7013', '6302', '6305', '6361', '6383',
     # 電子部品/半導体
     '6981', '6762', '6723', '6857', '6971', '6963', '6770', '4062',
+    '6146', '6273', '6479', '6481', '6504', '6506', '6594',
+    # 電機
+    '6701', '6724', '6841', '6952', '6988',
     # 化学/素材
-    '4063', '4188', '4183', '4042', '3402',
+    '4063', '4188', '4183', '4042', '3402', '4005', '4021', '4061', '4091', '4208',
+    '3407', '3436', '5201', '5333', '5411', '5802',
     # 富士フイルム/精密
     '4901', '7733', '7731', '4543',
-    # 食品/飲料
-    '2503', '2502', '2801', '2269', '4452', '2282',
+    # 食品/飲料/水産
+    '2503', '2502', '2801', '2269', '4452', '2282', '1332', '2002',
     # 不動産
-    '8830', '3231', '3289',
-    # 金融/保険
-    '8750', '8725', '8308', '8354', '7186',
+    '8830', '3231', '3289', '8802',
+    # 金融/保険/証券
+    '8750', '8725', '8308', '8354', '7186', '8309', '8601', '8630', '8697',
     # 海運
     '9101', '9104', '9107',
     # 自動車/部品
-    '5108', '7270', '7269', '6471', '5110', '8015',
+    '5108', '7270', '7269', '6471', '5110', '8015', '7211', '7261', '7272',
     # 製薬
     '4507', '4527', '4536', '4151',
-    # IT/サービス
-    '4307', '9613',
+    # IT/サービス/エンタメ
+    '4307', '9613', '2432', '4689', '4324', '6460', '7951',
     # 小売
     '9983', '2651', '3099', '8233', '3048', '9831',
-    # エンタメ
-    '6460',
+    # 商社
+    '8001', '8053',
+    # 建設
+    '1801', '1802', '1803', '1812', '1928', '1925',
+    # 交通/物流
+    '9005', '9021', '9064', '9201', '9202',
+    # エネルギー/公共
+    '5019', '5631', '9503', '9531', '9735',
+]
+
+# 米国株: S&P500相当 ~65銘柄
+US_DISCOVERY_STOCKS = [
+    # 金融
+    'GS', 'MS', 'C', 'WFC', 'BLK', 'AXP', 'SCHW', 'USB',
+    # ヘルスケア/医療機器
+    'TMO', 'DHR', 'ISRG', 'MDT', 'BSX', 'SYK', 'ABT',
+    'AMGN', 'GILD', 'BMY', 'PFE', 'REGN', 'VRTX',
+    # テクノロジー
+    'INTC', 'QCOM', 'TXN', 'MU', 'LRCX', 'AMAT', 'KLAC',
+    'ADBE', 'NOW', 'PYPL', 'UBER', 'PLTR', 'SNOW', 'DDOG',
+    # 産業/防衛
+    'CAT', 'DE', 'HON', 'ETN', 'GE', 'RTX', 'LMT', 'NOC', 'EMR',
+    # 消費/小売
+    'NKE', 'SBUX', 'MCD', 'CMG', 'TGT', 'LOW', 'TJX',
+    # 通信/メディア
+    'T', 'VZ', 'TMUS', 'CMCSA',
+    # エネルギー
+    'COP', 'SLB', 'PSX',
+    # 公共/不動産
+    'NEE', 'DUK', 'AMT', 'PLD',
+    # 自動車
+    'F', 'GM',
+    # その他
+    'ABNB',
 ]
 
 JP_DISCOVERY_NAMES = {
@@ -114,22 +151,65 @@ JP_DISCOVERY_NAMES = {
     '6981': '村田製作所', '6762': 'TDK', '6723': 'ルネサスエレクトロニクス',
     '6857': 'アドバンテスト', '6971': '京セラ', '6963': 'ローム',
     '6770': 'アルプスアルパイン', '4062': 'イビデン',
+    '6146': 'ディスコ', '6273': 'SMC', '6479': 'ミネベアミツミ',
+    '6481': 'THK', '6504': '富士電機', '6506': '安川電機', '6594': 'ニデック',
+    '6701': 'NEC', '6724': 'セイコーエプソン', '6841': '横河電機',
+    '6952': 'カシオ計算機', '6988': '日東電工',
     '4063': '信越化学工業', '4188': '三菱ケミカルグループ', '4183': '三井化学',
-    '4042': '東ソー', '3402': '東レ',
+    '4042': '東ソー', '3402': '東レ', '4005': '住友化学', '4021': '日産化学',
+    '4061': 'デンカ', '4091': '日本酸素HD', '4208': 'UBE',
+    '3407': '旭化成', '3436': 'SUMCO', '5201': 'AGC', '5333': '日本碍子',
+    '5411': 'JFEホールディングス', '5802': '住友電気工業',
     '4901': '富士フイルムHD', '7733': 'オリンパス', '7731': 'ニコン', '4543': 'テルモ',
     '2503': 'キリンHD', '2502': 'アサヒグループHD', '2801': 'キッコーマン',
     '2269': '明治HD', '4452': '花王', '2282': '日本ハム',
-    '8830': '住友不動産', '3231': '野村不動産HD', '3289': '東急不動産HD',
+    '1332': 'ニッスイ', '2002': '日清製粉グループ',
+    '8830': '住友不動産', '3231': '野村不動産HD', '3289': '東急不動産HD', '8802': '三菱地所',
     '8750': '第一生命HD', '8725': 'MS&ADインシュアランス',
     '8308': 'りそなHD', '8354': 'ふくおかFG', '7186': 'コンコルディアFG',
+    '8309': '三井住友トラストHD', '8601': '大和証券グループ',
+    '8630': 'SOMPOホールディングス', '8697': '日本取引所グループ',
     '9101': '日本郵船', '9104': '商船三井', '9107': '川崎汽船',
     '5108': 'ブリヂストン', '7270': 'SUBARU', '7269': 'スズキ',
     '6471': 'NSK（日本精工）', '5110': '住友ゴム工業', '8015': '豊田通商',
+    '7211': '三菱自動車工業', '7261': 'マツダ', '7272': 'ヤマハ発動機',
     '4507': '塩野義製薬', '4527': 'ロート製薬', '4536': '参天製薬', '4151': '協和キリン',
     '4307': '野村総合研究所', '9613': 'NTTデータグループ',
+    '2432': 'DeNA', '4689': 'LINEヤフー', '4324': '電通グループ',
+    '6460': 'セガサミーHD', '7951': 'ヤマハ',
     '9983': 'ファーストリテイリング', '2651': 'ローソン',
     '3099': '三越伊勢丹HD', '8233': '高島屋', '3048': 'ビックカメラ', '9831': 'ヤマダHD',
-    '6460': 'セガサミーHD',
+    '8001': '伊藤忠商事', '8053': '住友商事',
+    '1801': '大成建設', '1802': '大林組', '1803': '清水建設',
+    '1812': '鹿島建設', '1928': '積水ハウス', '1925': '大和ハウス工業',
+    '9005': '東急', '9021': 'JR西日本', '9064': 'ヤマトHD',
+    '9201': '日本航空（JAL）', '9202': 'ANAホールディングス',
+    '5019': '出光興産', '5631': '日本製鋼所',
+    '9503': '関西電力', '9531': '東京ガス', '9735': 'セコム',
+}
+
+US_DISCOVERY_NAMES = {
+    'GS': 'Goldman Sachs', 'MS': 'Morgan Stanley', 'C': 'Citigroup',
+    'WFC': 'Wells Fargo', 'BLK': 'BlackRock', 'AXP': 'American Express',
+    'SCHW': 'Charles Schwab', 'USB': 'U.S. Bancorp',
+    'TMO': 'Thermo Fisher', 'DHR': 'Danaher', 'ISRG': 'Intuitive Surgical',
+    'MDT': 'Medtronic', 'BSX': 'Boston Scientific', 'SYK': 'Stryker', 'ABT': 'Abbott',
+    'AMGN': 'Amgen', 'GILD': 'Gilead Sciences', 'BMY': 'Bristol-Myers Squibb',
+    'PFE': 'Pfizer', 'REGN': 'Regeneron', 'VRTX': 'Vertex Pharmaceuticals',
+    'INTC': 'Intel', 'QCOM': 'Qualcomm', 'TXN': 'Texas Instruments', 'MU': 'Micron',
+    'LRCX': 'Lam Research', 'AMAT': 'Applied Materials', 'KLAC': 'KLA Corporation',
+    'ADBE': 'Adobe', 'NOW': 'ServiceNow', 'PYPL': 'PayPal',
+    'UBER': 'Uber', 'PLTR': 'Palantir', 'SNOW': 'Snowflake', 'DDOG': 'Datadog',
+    'CAT': 'Caterpillar', 'DE': 'Deere & Co', 'HON': 'Honeywell',
+    'ETN': 'Eaton', 'GE': 'GE Aerospace', 'RTX': 'RTX (Raytheon)',
+    'LMT': 'Lockheed Martin', 'NOC': 'Northrop Grumman', 'EMR': 'Emerson Electric',
+    'NKE': 'Nike', 'SBUX': 'Starbucks', 'MCD': "McDonald's",
+    'CMG': 'Chipotle', 'TGT': 'Target', 'LOW': "Lowe's", 'TJX': 'TJX Companies',
+    'T': 'AT&T', 'VZ': 'Verizon', 'TMUS': 'T-Mobile', 'CMCSA': 'Comcast',
+    'COP': 'ConocoPhillips', 'SLB': 'SLB (Schlumberger)', 'PSX': 'Phillips 66',
+    'NEE': 'NextEra Energy', 'DUK': 'Duke Energy', 'AMT': 'American Tower', 'PLD': 'Prologis',
+    'F': 'Ford', 'GM': 'General Motors',
+    'ABNB': 'Airbnb',
 }
 
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
@@ -556,10 +636,11 @@ def update_metadata(ticker):
     return jsonify({'success': True, 'ticker': disp, **entry})
 
 
-# JP_DISCOVERY_NAMESをSTOCK_NAMESにマージ（重複なし）
-for _k, _v in JP_DISCOVERY_NAMES.items():
-    if _k not in STOCK_NAMES:
-        STOCK_NAMES[_k] = _v
+# 発掘スキャン名前辞書をSTOCK_NAMESにマージ
+for _names in (JP_DISCOVERY_NAMES, US_DISCOVERY_NAMES):
+    for _k, _v in _names.items():
+        if _k not in STOCK_NAMES:
+            STOCK_NAMES[_k] = _v
 
 # ── スキャン バックグラウンドスレッド管理 ─────────────────────────────────────
 _scan_lock  = threading.Lock()
@@ -568,11 +649,13 @@ _scan_state = {'status': 'idle', 'results': None, 'updated_at': 0, 'phase': '',
                'earn_total': 0, 'earn_done': 0, 'earn_current': '', 'earn_current_name': '',
                'start_time': 0}
 
-# ── 日本株発掘スキャン スレッド管理 ───────────────────────────────────────────
-_jp_lock  = threading.Lock()
-_jp_state = {'status': 'idle', 'results': None, 'updated_at': 0,
-             'total': 0, 'done': 0, 'current': '', 'current_name': '',
-             'start_time': 0}
+# ── 発掘スキャン スレッド管理（JP/US共用）────────────────────────────────────
+def _empty_disc_state():
+    return {'status': 'idle', 'results': None, 'updated_at': 0,
+            'total': 0, 'done': 0, 'current': '', 'current_name': '', 'start_time': 0}
+
+_disc_lock  = threading.Lock()
+_disc_state = {'jp': _empty_disc_state(), 'us': _empty_disc_state()}
 
 def load_auto_scan_list():
     """Supabaseから自動取得済み値上がり銘柄リストを返す (stocks, updated_at)"""
@@ -696,95 +779,125 @@ def _invalidate_scan_cache():
         _scan_state['status'] = 'idle'
 
 
-def _run_jp_scan_thread():
-    """日本株発掘スキャン: JP_DISCOVERY_STOCKSを並列スキャンし買い/上昇トレンドのみ返す"""
-    start_time = time.time()
+def _is_recent_gc(last_gc, months=6):
+    """last_gc (YYYY-MM形式) が直近N ヶ月以内かどうか判定"""
+    if not last_gc:
+        return False
+    try:
+        y, m = map(int, last_gc.split('-'))
+        now = datetime.now()
+        diff = (now.year - y) * 12 + (now.month - m)
+        return 0 <= diff <= months
+    except Exception:
+        return False
 
-    # スキャン対象：JP_DISCOVERY_STOCKS のうちまだ SCAN_STOCKS にないもの
-    existing = set(display_ticker(normalize_ticker(t)) for t in SCAN_STOCKS)
-    targets = [t for t in JP_DISCOVERY_STOCKS
-               if display_ticker(normalize_ticker(t)) not in existing]
-    total = len(targets)
 
-    with _jp_lock:
-        _jp_state.update({
-            'total': total, 'done': 0,
-            'current': '', 'current_name': '',
-            'start_time': start_time,
+def _run_discovery_thread(market: str):
+    """発掘スキャン: JP or US の発掘対象銘柄をスキャンし3種に分類して返す"""
+    stock_list = JP_DISCOVERY_STOCKS if market == 'jp' else US_DISCOVERY_STOCKS
+    existing   = set(display_ticker(normalize_ticker(t)) for t in SCAN_STOCKS)
+    targets    = [t for t in stock_list
+                  if display_ticker(normalize_ticker(t)) not in existing]
+    total      = len(targets)
+
+    with _disc_lock:
+        _disc_state[market].update({
+            'status': 'running', 'total': total, 'done': 0,
+            'current': '', 'current_name': '', 'start_time': time.time(),
         })
 
-    results = []
-    _counter = [0]
+    all_results = []
+    _counter    = [0]
 
     def safe(t):
         name = STOCK_NAMES.get(t, t)
-        with _jp_lock:
-            _jp_state['current']      = t
-            _jp_state['current_name'] = name
+        with _disc_lock:
+            _disc_state[market]['current']      = t
+            _disc_state[market]['current_name'] = name
         try:
             r = scan_stock_data(t)
         except Exception:
             r = None
-        with _jp_lock:
+        with _disc_lock:
             _counter[0] += 1
-            _jp_state['done'] = _counter[0]
+            _disc_state[market]['done'] = _counter[0]
         return r
 
     with ThreadPoolExecutor(max_workers=12) as ex:
         for data in ex.map(safe, targets):
-            if data and data.get('signal_type') in ('buy', 'uptrend'):
-                results.append(data)
+            if data:
+                all_results.append(data)
 
-    # シグナル優先度でソート
-    SIGNAL_RANK = {'買い': 0, '上昇トレンド': 1}
-    results.sort(key=lambda r: SIGNAL_RANK.get(r.get('signal', ''), 9))
+    # 3種に分類
+    buy, uptrend, recent_gc = [], [], []
+    for r in all_results:
+        st = r.get('signal_type', '')
+        if st == 'buy':
+            buy.append(r)
+        elif st == 'uptrend':
+            uptrend.append(r)
+        elif _is_recent_gc(r.get('last_gc'), months=6):
+            recent_gc.append(r)
+
+    # 直近GCは新しい順にソート
+    def gc_key(r):
+        gc = r.get('last_gc') or ''
+        return gc
+    recent_gc.sort(key=gc_key, reverse=True)
+
+    results = {'buy': buy, 'uptrend': uptrend, 'recent_gc': recent_gc}
+    buy_cnt = len(buy) + len(uptrend)
+    print(f'[discovery:{market}] 完了: 買い/上昇={buy_cnt}, 直近GC={len(recent_gc)} / {total}銘柄')
 
     updated_at = time.time()
-    with _jp_lock:
-        _jp_state.update({
+    with _disc_lock:
+        _disc_state[market].update({
             'status': 'done', 'results': results,
             'updated_at': updated_at, 'done': total,
         })
-    print(f'[jp-discovery] 完了: {len(results)}/{total}件 がシグナルあり')
 
 
-@app.route('/api/jp-discovery', methods=['GET', 'POST'])
-def jp_discovery():
-    """日本株発掘スキャン API"""
+@app.route('/api/discovery', methods=['GET', 'POST'])
+def discovery():
+    """発掘スキャン API (market=jp|us)"""
+    market = request.args.get('market', 'jp')
+    if market not in ('jp', 'us'):
+        return jsonify({'error': 'market は jp か us を指定してください'}), 400
+
     if request.method == 'POST':
-        with _jp_lock:
-            state = dict(_jp_state)
+        with _disc_lock:
+            state = dict(_disc_state[market])
         if state['status'] == 'running':
-            return jsonify({'status': 'running', 'message': 'スキャン実行中です'})
-        with _jp_lock:
-            _jp_state.update({
-                'status': 'running', 'results': None, 'updated_at': 0,
-                'total': 0, 'done': 0, 'current': '', 'current_name': '',
-                'start_time': time.time(),
-            })
-        t = threading.Thread(target=_run_jp_scan_thread, daemon=True)
+            return jsonify({'status': 'running'})
+        with _disc_lock:
+            _disc_state[market] = _empty_disc_state()
+            _disc_state[market]['status'] = 'running'
+        t = threading.Thread(target=_run_discovery_thread, args=(market,), daemon=True)
         t.start()
         return jsonify({'status': 'running'})
 
     # GET: 現在の状態を返す
-    with _jp_lock:
-        state = dict(_jp_state)
+    with _disc_lock:
+        state = dict(_disc_state[market])
 
     if state['status'] == 'done':
+        res = state.get('results') or {}
         return jsonify({
             'status':     'done',
-            'results':    state.get('results', []),
-            'updated_at': state.get('updated_at', 0),
-            'total':      state.get('total', 0),
+            'buy':        res.get('buy',       []),
+            'uptrend':    res.get('uptrend',    []),
+            'recent_gc':  res.get('recent_gc',  []),
+            'total':      state.get('total',     0),
+            'updated_at': state.get('updated_at',0),
         })
     if state['status'] == 'running':
         return jsonify({
             'status':       'running',
-            'total':        state.get('total', 0),
-            'done':         state.get('done', 0),
-            'current':      state.get('current', ''),
+            'total':        state.get('total',        0),
+            'done':         state.get('done',         0),
+            'current':      state.get('current',      ''),
             'current_name': state.get('current_name', ''),
-            'start_time':   state.get('start_time', 0),
+            'start_time':   state.get('start_time',   0),
         })
     return jsonify({'status': 'idle'})
 
