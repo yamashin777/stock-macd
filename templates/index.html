@@ -346,6 +346,18 @@ header {
 .memo-link:hover { opacity:.75; }
 .detail-memo-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
 .detail-memo-lbl { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+/* AI解説 */
+.ai-section { margin-bottom:12px; }
+.ai-section-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.ai-section-lbl { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+.ai-comment-box { background:var(--bg3); border:1px solid var(--border); border-radius:8px;
+  padding:12px 14px; font-size:13px; color:var(--text); line-height:1.75; min-height:36px; }
+.ai-comment-box.loading { color:var(--muted); font-style:italic; }
+.ai-comment-box.error   { color:#f85149; font-size:12px; }
+.btn-ai { background:rgba(99,102,241,.15); color:#818cf8; border:1px solid rgba(99,102,241,.4);
+  padding:3px 10px; border-radius:5px; font-size:11px; font-weight:600; cursor:pointer; transition:all .15s; }
+.btn-ai:hover { background:rgba(99,102,241,.3); }
+.btn-ai:disabled { opacity:.4; cursor:not-allowed; }
 /* ── モーダル ────────────────────────────────── */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.65);
   display:flex; align-items:center; justify-content:center; z-index:9000; }
@@ -1162,6 +1174,14 @@ function renderDetail(data) {
     </div>
     <div class="detail-memo">${data.memo ? linkifyMemo(data.memo) : '<span style="opacity:.4">メモなし — ✎ 編集から追加できます</span>'}</div>
 
+    <div class="ai-section" id="ai-section">
+      <div class="ai-section-hd">
+        <div class="ai-section-lbl">🤖 AI解説（月足MACDトレンド分析）</div>
+        <button class="btn-ai" id="btn-ai-fetch" onclick="fetchAiComment()">解説を取得</button>
+      </div>
+      <div class="ai-comment-box" id="ai-comment-box" style="display:none"></div>
+    </div>
+
     <div class="period-bar">
       <span class="period-lbl">表示期間:</span>
       <button class="pbtn" data-m="12" onclick="applyPeriod(12)">1年</button>
@@ -1183,6 +1203,55 @@ function renderDetail(data) {
 
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   drawCharts(data);
+}
+
+// ── AI解説 ─────────────────────────────────────────────────────────────────
+async function fetchAiComment() {
+  const box = document.getElementById('ai-comment-box');
+  const btn = document.getElementById('btn-ai-fetch');
+  if (!box || !btn || !detailData) return;
+
+  btn.disabled = true;
+  btn.textContent = '取得中…';
+  box.style.display = 'block';
+  box.className = 'ai-comment-box loading';
+  box.textContent = '🤖 AIが月足MACDデータを分析中です…';
+
+  try {
+    const res  = await fetch('/api/ai-comment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticker:          detailData.ticker,
+        name:            detailData.name,
+        signal:          detailData.signal,
+        macd_value:      detailData.macd_value,
+        signal_value:    detailData.signal_value,
+        histogram_value: detailData.histogram_value,
+        current_price:   detailData.current_price,
+        change_pct:      detailData.change_pct,
+        currency:        detailData.currency,
+        last_gc:         detailData.last_gc,
+        last_dc:         detailData.last_dc,
+      }),
+    });
+    const data = await res.json();
+    if (data.comment) {
+      box.className = 'ai-comment-box';
+      // 改行を<br>に変換して表示
+      box.innerHTML = escapeHtml(data.comment).replace(/\n/g, '<br>');
+      btn.textContent = '↻ 再取得';
+    } else {
+      box.className = 'ai-comment-box error';
+      box.textContent = data.error || 'AI解説の取得に失敗しました';
+      btn.textContent = '解説を取得';
+    }
+  } catch(err) {
+    box.className = 'ai-comment-box error';
+    box.textContent = '通信エラーが発生しました。しばらくしてから再試行してください。';
+    btn.textContent = '解説を取得';
+  }
+  btn.disabled = false;
 }
 
 // ── Zoom helpers ───────────────────────────────────────────────────────────
@@ -1971,7 +2040,7 @@ async function scanAddToWL(e, ticker) {
     const res = await fetch('/api/watchlist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticker, memo: '銘柄スキャンから登録' }),
+      body: JSON.stringify({ ticker, memo: '銘柄スキャンから登録' + _todayYMD() }),
     });
     const data = await res.json();
     if (data.success) {
@@ -1987,6 +2056,13 @@ async function scanAddToWL(e, ticker) {
     btn.disabled = false;
     btn.textContent = '＋ WL';
   }
+}
+
+function _todayYMD() {
+  const d = new Date();
+  return d.getFullYear().toString()
+    + String(d.getMonth() + 1).padStart(2, '0')
+    + String(d.getDate()).padStart(2, '0');
 }
 
 function scanEditMemo(e, ticker, el) {
@@ -2216,7 +2292,7 @@ async function discAddToWL(e, ticker) {
     const mktLabel = discMarket === 'jp' ? '🇯🇵日本株' : '🇺🇸米国株';
     const res  = await fetch('/api/watchlist', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ ticker, memo: `発掘スキャンから登録（${mktLabel}）` }),
+      body: JSON.stringify({ ticker, memo: `発掘スキャンから登録（${mktLabel}）` + _todayYMD() }),
     });
     const data = await res.json();
     if (data.success) {
@@ -2252,7 +2328,7 @@ async function discAddToScan(e, ticker) {
       const mktLabel = discMarket === 'jp' ? '🇯🇵日本株' : '🇺🇸米国株';
       fetch(`/api/metadata/${encodeURIComponent(ticker)}`, {
         method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ memo_if_empty: `発掘スキャンから追加（${mktLabel}）` }),
+        body: JSON.stringify({ memo_if_empty: `発掘スキャンから追加（${mktLabel}）` + _todayYMD() }),
       }).catch(() => {});
     } else {
       const already = data.error === 'すでにスキャンリストに含まれています';
