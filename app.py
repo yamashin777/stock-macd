@@ -755,8 +755,12 @@ def add_to_watchlist():
     wl.append(disp)
     save_watchlist(wl)
     meta = load_metadata()
+    auto_memo = str(body.get('memo', '')).strip()
     if disp not in meta:
-        meta[disp] = {'custom_name': '', 'memo': ''}
+        meta[disp] = {'custom_name': '', 'memo': auto_memo}
+        save_metadata(meta)
+    elif auto_memo and not meta[disp].get('memo'):
+        meta[disp]['memo'] = auto_memo
         save_metadata(meta)
     return jsonify({'success': True, 'watchlist': wl})
 
@@ -798,6 +802,8 @@ def update_metadata(ticker):
         entry['custom_name'] = str(body['custom_name']).strip()
     if 'memo' in body:
         entry['memo'] = str(body['memo'])
+    elif 'memo_if_empty' in body and not entry.get('memo'):
+        entry['memo'] = str(body['memo_if_empty'])
     meta[disp] = entry
     save_metadata(meta)
     return jsonify({'success': True, 'ticker': disp, **entry})
@@ -1019,6 +1025,14 @@ def _run_discovery_thread(market: str):
             if data:
                 all_results.append(data)
 
+    # メタデータ（memo）を発掘結果に反映
+    meta = load_metadata()
+    for r in all_results:
+        entry = meta.get(r['ticker'], {})
+        if entry.get('custom_name'):
+            r['custom_name'] = entry['custom_name']
+        r['memo'] = entry.get('memo', '')
+
     # 3種に分類
     buy, uptrend, recent_gc = [], [], []
     for r in all_results:
@@ -1132,6 +1146,14 @@ def _run_scan_thread():
         for data in ex.map(safe, all_stocks):
             if data:
                 results.append(data)
+
+    # メタデータ（memo/custom_name）をスキャン結果に反映
+    meta = load_metadata()
+    for r in results:
+        entry = meta.get(r['ticker'], {})
+        if entry.get('custom_name'):
+            r['custom_name'] = entry['custom_name']
+        r['memo'] = entry.get('memo', '')
 
     # ── フェーズ1完了: 価格/MACDデータを先に保存 ──────────────────────────────
     prices_at = time.time()

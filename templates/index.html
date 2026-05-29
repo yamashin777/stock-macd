@@ -484,6 +484,12 @@ header {
   border: 1px solid var(--border); padding: 3px 8px; border-radius: 5px;
   white-space: nowrap;
 }
+.scan-memo-cell {
+  font-size: 10px; margin-top: 3px; cursor: pointer;
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 1px 2px; border-radius: 3px;
+}
+.scan-memo-cell:hover { background: var(--border); }
 .scan-name-chart {
   display: flex; align-items: center; gap: 8px; width: 100%;
 }
@@ -1732,7 +1738,13 @@ function renderScanView() {
       : '<span class="sig-date-none">—</span>';
     const addBtn = inWL
       ? `<span class="in-wl-badge">✓ 登録済</span>`
-      : `<button class="btn-add-wl" id="scan-add-${d.ticker}" onclick="scanAddToWL(event,'${d.ticker}')">＋ 追加</button>`;
+      : `<button class="btn-add-wl" id="scan-add-${d.ticker}" onclick="scanAddToWL(event,'${d.ticker}')">＋ WL</button>`;
+
+    const safeT2 = d.ticker.replace(/'/g, "\\'");
+    const memoTxt = d.memo
+      ? `<span style="color:var(--muted)">📝 ${escapeHtml(d.memo)}</span>`
+      : `<span style="color:var(--border)">📝 メモ追加</span>`;
+    const memoEl = `<div id="scan-memo-${d.ticker}" class="scan-memo-cell" onclick="scanEditMemo(event,'${safeT2}',this)">${memoTxt}</div>`;
 
     const chart = d.chart_close
       ? `<div class="scan-inline-chart">${sparklineSVG(d.chart_close, d.chart_macd_hist, 110, 40)}</div>`
@@ -1764,6 +1776,7 @@ function renderScanView() {
               <span class="sig-ticker">${d.ticker}</span>
               <span class="badge ${cfg.cls} scan-sig-badge scan-badge-desk" onclick="setScanSort('signal')" title="シグナルでソート" style="font-size:9px;padding:1px 5px;margin-left:4px">${cfg.lbl}</span>
             </div>
+            ${memoEl}
           </div>
           ${chart}
         </div>
@@ -1953,28 +1966,64 @@ async function scanAddToWL(e, ticker) {
   const btn = document.getElementById(`scan-add-${ticker}`);
   if (!btn) return;
   btn.disabled = true;
-  btn.textContent = '追加中…';
+  btn.textContent = '…';
   try {
     const res = await fetch('/api/watchlist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticker }),
+      body: JSON.stringify({ ticker, memo: '銘柄スキャンから登録' }),
     });
     const data = await res.json();
     if (data.success) {
       order = data.watchlist;
       btn.outerHTML = `<span class="in-wl-badge">✓ 登録済</span>`;
-      // ウォッチリストも更新
       fetchAndRenderAll();
     } else {
       btn.disabled = false;
-      btn.textContent = '＋ 追加';
+      btn.textContent = '＋ WL';
       alert(data.error || '追加に失敗しました');
     }
   } catch(err) {
     btn.disabled = false;
-    btn.textContent = '＋ 追加';
+    btn.textContent = '＋ WL';
   }
+}
+
+function scanEditMemo(e, ticker, el) {
+  e.stopPropagation();
+  // 現在のメモ値をキャッシュから取得
+  const cur = (scanData && scanData.results || []).find(r => r.ticker === ticker);
+  const curMemo = cur ? (cur.memo || '') : '';
+
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = curMemo;
+  inp.placeholder = 'メモを入力…';
+  inp.style.cssText = 'font-size:10px;width:170px;padding:2px 5px;border:1px solid var(--green);background:var(--bg);color:var(--fg);border-radius:3px;outline:none';
+
+  const save = async () => {
+    const val = inp.value.trim();
+    // ローカルキャッシュ更新
+    if (cur) cur.memo = val;
+    // 表示更新
+    el.innerHTML = val
+      ? `<span style="color:var(--muted)">📝 ${escapeHtml(val)}</span>`
+      : `<span style="color:var(--border)">📝 メモ追加</span>`;
+    // サーバー保存
+    await fetch(`/api/metadata/${encodeURIComponent(ticker)}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ memo: val }),
+    }).catch(() => {});
+  };
+  inp.onblur  = save;
+  inp.onkeydown = ev => {
+    if (ev.key === 'Enter')  { inp.blur(); }
+    if (ev.key === 'Escape') { inp.value = curMemo; inp.blur(); }
+  };
+  el.innerHTML = '';
+  el.appendChild(inp);
+  inp.focus();
+  inp.select();
 }
 
 // ── 発掘スキャンタブ ─────────────────────────────────────────────────────────
@@ -2111,6 +2160,7 @@ function _renderDiscResults(data) {
         <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
           <span class="disc-ticker">${safeT}</span>${gcStr}
         </div>
+        ${d.memo ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📝 ${escapeHtml(d.memo)}</div>` : ''}
       </div>
       <div class="disc-price">${priceFmt} ${chgStr}</div>
       <div class="disc-actions">
@@ -2163,9 +2213,10 @@ async function discAddToWL(e, ticker) {
   const btn = document.getElementById(`dwl-${ticker}`);
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
+    const mktLabel = discMarket === 'jp' ? '🇯🇵日本株' : '🇺🇸米国株';
     const res  = await fetch('/api/watchlist', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ ticker }),
+      body: JSON.stringify({ ticker, memo: `発掘スキャンから登録（${mktLabel}）` }),
     });
     const data = await res.json();
     if (data.success) {
@@ -2197,6 +2248,12 @@ async function discAddToScan(e, ticker) {
       const el = document.getElementById('scan-total');
       if (el) el.textContent = `対象: ${data.total}銘柄`;
       if (btn) btn.outerHTML = `<span style="font-size:10px;color:var(--blue)">✓ 追加済</span>`;
+      // 自動メモ（未設定の場合のみ）
+      const mktLabel = discMarket === 'jp' ? '🇯🇵日本株' : '🇺🇸米国株';
+      fetch(`/api/metadata/${encodeURIComponent(ticker)}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ memo_if_empty: `発掘スキャンから追加（${mktLabel}）` }),
+      }).catch(() => {});
     } else {
       const already = data.error === 'すでにスキャンリストに含まれています';
       if (btn) btn.outerHTML = already
