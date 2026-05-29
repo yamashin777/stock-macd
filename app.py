@@ -78,6 +78,60 @@ STOCK_NAMES = {
 }
 SCAN_CACHE_TTL = 12 * 3600  # 12時間
 
+# ── 日本株発掘スキャン対象（SCAN_STOCKSにない銘柄）────────────────────────────
+JP_DISCOVERY_STOCKS = [
+    # 重工/機械
+    '7011', '7012', '7013', '6302', '6305', '6361', '6383',
+    # 電子部品/半導体
+    '6981', '6762', '6723', '6857', '6971', '6963', '6770', '4062',
+    # 化学/素材
+    '4063', '4188', '4183', '4042', '3402',
+    # 富士フイルム/精密
+    '4901', '7733', '7731', '4543',
+    # 食品/飲料
+    '2503', '2502', '2801', '2269', '4452', '2282',
+    # 不動産
+    '8830', '3231', '3289',
+    # 金融/保険
+    '8750', '8725', '8308', '8354', '7186',
+    # 海運
+    '9101', '9104', '9107',
+    # 自動車/部品
+    '5108', '7270', '7269', '6471', '5110', '8015',
+    # 製薬
+    '4507', '4527', '4536', '4151',
+    # IT/サービス
+    '4307', '9613',
+    # 小売
+    '9983', '2651', '3099', '8233', '3048', '9831',
+    # エンタメ
+    '6460',
+]
+
+JP_DISCOVERY_NAMES = {
+    '7011': '三菱重工業', '7012': '川崎重工業', '7013': 'IHI',
+    '6302': '住友重機械工業', '6305': '日立建機', '6361': '荏原製作所', '6383': 'ダイフク',
+    '6981': '村田製作所', '6762': 'TDK', '6723': 'ルネサスエレクトロニクス',
+    '6857': 'アドバンテスト', '6971': '京セラ', '6963': 'ローム',
+    '6770': 'アルプスアルパイン', '4062': 'イビデン',
+    '4063': '信越化学工業', '4188': '三菱ケミカルグループ', '4183': '三井化学',
+    '4042': '東ソー', '3402': '東レ',
+    '4901': '富士フイルムHD', '7733': 'オリンパス', '7731': 'ニコン', '4543': 'テルモ',
+    '2503': 'キリンHD', '2502': 'アサヒグループHD', '2801': 'キッコーマン',
+    '2269': '明治HD', '4452': '花王', '2282': '日本ハム',
+    '8830': '住友不動産', '3231': '野村不動産HD', '3289': '東急不動産HD',
+    '8750': '第一生命HD', '8725': 'MS&ADインシュアランス',
+    '8308': 'りそなHD', '8354': 'ふくおかFG', '7186': 'コンコルディアFG',
+    '9101': '日本郵船', '9104': '商船三井', '9107': '川崎汽船',
+    '5108': 'ブリヂストン', '7270': 'SUBARU', '7269': 'スズキ',
+    '6471': 'NSK（日本精工）', '5110': '住友ゴム工業', '8015': '豊田通商',
+    '4507': '塩野義製薬', '4527': 'ロート製薬', '4536': '参天製薬', '4151': '協和キリン',
+    '4307': '野村総合研究所', '9613': 'NTTデータグループ',
+    '9983': 'ファーストリテイリング', '2651': 'ローソン',
+    '3099': '三越伊勢丹HD', '8233': '高島屋', '3048': 'ビックカメラ', '9831': 'ヤマダHD',
+    '6460': 'セガサミーHD',
+}
+
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '')
 
@@ -502,12 +556,23 @@ def update_metadata(ticker):
     return jsonify({'success': True, 'ticker': disp, **entry})
 
 
+# JP_DISCOVERY_NAMESをSTOCK_NAMESにマージ（重複なし）
+for _k, _v in JP_DISCOVERY_NAMES.items():
+    if _k not in STOCK_NAMES:
+        STOCK_NAMES[_k] = _v
+
 # ── スキャン バックグラウンドスレッド管理 ─────────────────────────────────────
 _scan_lock  = threading.Lock()
 _scan_state = {'status': 'idle', 'results': None, 'updated_at': 0, 'phase': '',
                'total': 0, 'done': 0, 'current': '', 'current_name': '',
                'earn_total': 0, 'earn_done': 0, 'earn_current': '', 'earn_current_name': '',
                'start_time': 0}
+
+# ── 日本株発掘スキャン スレッド管理 ───────────────────────────────────────────
+_jp_lock  = threading.Lock()
+_jp_state = {'status': 'idle', 'results': None, 'updated_at': 0,
+             'total': 0, 'done': 0, 'current': '', 'current_name': '',
+             'start_time': 0}
 
 def load_auto_scan_list():
     """Supabaseから自動取得済み値上がり銘柄リストを返す (stocks, updated_at)"""
@@ -629,6 +694,99 @@ def _invalidate_scan_cache():
         _sb_save('scan_cache', {'results': [], 'updated_at': 0})
     with _scan_lock:
         _scan_state['status'] = 'idle'
+
+
+def _run_jp_scan_thread():
+    """日本株発掘スキャン: JP_DISCOVERY_STOCKSを並列スキャンし買い/上昇トレンドのみ返す"""
+    start_time = time.time()
+
+    # スキャン対象：JP_DISCOVERY_STOCKS のうちまだ SCAN_STOCKS にないもの
+    existing = set(display_ticker(normalize_ticker(t)) for t in SCAN_STOCKS)
+    targets = [t for t in JP_DISCOVERY_STOCKS
+               if display_ticker(normalize_ticker(t)) not in existing]
+    total = len(targets)
+
+    with _jp_lock:
+        _jp_state.update({
+            'total': total, 'done': 0,
+            'current': '', 'current_name': '',
+            'start_time': start_time,
+        })
+
+    results = []
+    _counter = [0]
+
+    def safe(t):
+        name = STOCK_NAMES.get(t, t)
+        with _jp_lock:
+            _jp_state['current']      = t
+            _jp_state['current_name'] = name
+        try:
+            r = scan_stock_data(t)
+        except Exception:
+            r = None
+        with _jp_lock:
+            _counter[0] += 1
+            _jp_state['done'] = _counter[0]
+        return r
+
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        for data in ex.map(safe, targets):
+            if data and data.get('signal_type') in ('buy', 'uptrend'):
+                results.append(data)
+
+    # シグナル優先度でソート
+    SIGNAL_RANK = {'買い': 0, '上昇トレンド': 1}
+    results.sort(key=lambda r: SIGNAL_RANK.get(r.get('signal', ''), 9))
+
+    updated_at = time.time()
+    with _jp_lock:
+        _jp_state.update({
+            'status': 'done', 'results': results,
+            'updated_at': updated_at, 'done': total,
+        })
+    print(f'[jp-discovery] 完了: {len(results)}/{total}件 がシグナルあり')
+
+
+@app.route('/api/jp-discovery', methods=['GET', 'POST'])
+def jp_discovery():
+    """日本株発掘スキャン API"""
+    if request.method == 'POST':
+        with _jp_lock:
+            state = dict(_jp_state)
+        if state['status'] == 'running':
+            return jsonify({'status': 'running', 'message': 'スキャン実行中です'})
+        with _jp_lock:
+            _jp_state.update({
+                'status': 'running', 'results': None, 'updated_at': 0,
+                'total': 0, 'done': 0, 'current': '', 'current_name': '',
+                'start_time': time.time(),
+            })
+        t = threading.Thread(target=_run_jp_scan_thread, daemon=True)
+        t.start()
+        return jsonify({'status': 'running'})
+
+    # GET: 現在の状態を返す
+    with _jp_lock:
+        state = dict(_jp_state)
+
+    if state['status'] == 'done':
+        return jsonify({
+            'status':     'done',
+            'results':    state.get('results', []),
+            'updated_at': state.get('updated_at', 0),
+            'total':      state.get('total', 0),
+        })
+    if state['status'] == 'running':
+        return jsonify({
+            'status':       'running',
+            'total':        state.get('total', 0),
+            'done':         state.get('done', 0),
+            'current':      state.get('current', ''),
+            'current_name': state.get('current_name', ''),
+            'start_time':   state.get('start_time', 0),
+        })
+    return jsonify({'status': 'idle'})
 
 
 def _run_scan_thread():

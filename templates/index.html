@@ -443,6 +443,34 @@ header {
   background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: 13px; padding: 0; line-height: 1; transition: color .15s;
 }
+/* ── 日本株発掘スキャン パネル ──────────────────────────────────────────────── */
+.jp-disc-panel {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; margin-top: 16px; overflow: hidden;
+}
+.jp-disc-header {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+}
+.jp-disc-title { font-size: 13px; font-weight: 700; }
+.jp-disc-subtitle { font-size: 11px; color: var(--muted); }
+.jp-disc-body { padding: 12px 14px; }
+.jp-disc-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.jp-disc-row:last-child { border-bottom: none; }
+.jp-disc-name { flex: 1 1 120px; font-weight: 600; font-size: 13px; }
+.jp-disc-ticker { font-size: 11px; color: var(--muted); }
+.jp-disc-price { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 70px; text-align: right; }
+.jp-disc-actions { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.jp-disc-actions button {
+  font-size: 10px; padding: 3px 8px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg3); color: var(--text);
+  transition: all .15s;
+}
+.jp-disc-actions button:hover { border-color: var(--blue); color: var(--blue); }
 .scan-custom-tag button:hover { color: var(--red); }
 .scan-stats { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
 .btn-add-wl {
@@ -653,6 +681,7 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
       <button class="btn-sm" onclick="toggleScanMgmt()">⚙ 銘柄管理</button>
       <span id="scan-updated" style="font-size:11px;color:var(--muted)"></span>
       <button class="btn-sm" onclick="scanData=null;loadScan(true)">↻ 再スキャン</button>
+      <button class="btn-sm" id="btn-jp-disc" onclick="startJpDiscovery()" style="color:var(--green);border-color:var(--green)">🔍 日本株発掘</button>
     </div>
   </div>
 
@@ -683,6 +712,7 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
   </div>
 
   <div id="scan-content" style="margin-top:12px"></div>
+  <div id="jp-disc-panel" style="display:none"></div>
 </div>
 
 <div class="app-body" id="app-body">
@@ -1930,6 +1960,188 @@ async function scanAddToWL(e, ticker) {
   } catch(err) {
     btn.disabled = false;
     btn.textContent = '＋ 追加';
+  }
+}
+
+// ── 日本株発掘スキャン ───────────────────────────────────────────────────────
+let _jpDiscPolling = false;
+
+async function startJpDiscovery() {
+  const panel = document.getElementById('jp-disc-panel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  _showJpDiscLoading(0, null);
+  const btn = document.getElementById('btn-jp-disc');
+  if (btn) { btn.disabled = true; btn.textContent = '🔍 スキャン中…'; }
+  try {
+    await fetch('/api/jp-discovery', { method: 'POST' });
+  } catch(e) {}
+  _jpDiscPolling = true;
+  _pollJpDiscovery(Date.now());
+}
+
+function _showJpDiscLoading(elapsed, d) {
+  const panel = document.getElementById('jp-disc-panel');
+  const total = d && d.total || 0;
+  const done  = d && d.done  || 0;
+  const pct   = total > 0 ? Math.min(Math.round(done / total * 100), 100) : 0;
+  const curName = (d && (d.current_name || d.current)) || '';
+  const sec = Math.round(elapsed / 1000);
+  const elStr = sec > 0 ? (sec >= 60 ? `${Math.floor(sec/60)}分${sec%60}秒` : `${sec}秒`) : '';
+
+  panel.innerHTML = `
+  <div class="jp-disc-panel">
+    <div class="jp-disc-header">
+      <span class="jp-disc-title">🔍 日本株発掘スキャン</span>
+      <span class="jp-disc-subtitle">買いシグナル・上昇トレンドの銘柄を探索中…</span>
+    </div>
+    <div class="jp-disc-body">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px">📊 MACDデータ取得中</div>
+      <div style="background:var(--border);border-radius:4px;height:7px;width:240px;margin:8px auto 6px;overflow:hidden">
+        <div style="background:var(--green);width:${pct}%;height:100%;border-radius:4px;transition:width .4s"></div>
+      </div>
+      ${total > 0 ? `<div style="font-size:12px;color:var(--muted)">${done} / ${total} 銘柄 (${pct}%)</div>` : ''}
+      ${curName ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">処理中: <span style="color:var(--green);font-weight:600">${escapeHtml(curName)}</span></div>` : ''}
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;opacity:.7">${elStr ? `経過 ${elStr}` : 'スキャン開始中…'}</div>
+    </div>
+  </div>`;
+}
+
+async function _pollJpDiscovery(startTime) {
+  if (!_jpDiscPolling) return;
+  try {
+    const res  = await fetch('/api/jp-discovery');
+    const data = await res.json();
+    if (data.status === 'done') {
+      _jpDiscPolling = false;
+      const btn = document.getElementById('btn-jp-disc');
+      if (btn) { btn.disabled = false; btn.textContent = '🔍 日本株発掘'; }
+      _renderJpDiscResults(data);
+    } else if (data.status === 'running') {
+      _showJpDiscLoading(Date.now() - startTime, data);
+      setTimeout(() => _pollJpDiscovery(startTime), 3000);
+    } else {
+      _jpDiscPolling = false;
+      const btn = document.getElementById('btn-jp-disc');
+      if (btn) { btn.disabled = false; btn.textContent = '🔍 日本株発掘'; }
+    }
+  } catch(e) {
+    _jpDiscPolling = false;
+    const btn = document.getElementById('btn-jp-disc');
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 日本株発掘'; }
+  }
+}
+
+function _renderJpDiscResults(data) {
+  const panel = document.getElementById('jp-disc-panel');
+  const results = data.results || [];
+  const total   = data.total   || 0;
+
+  const signalCfg = {
+    '買い':       { cls: 'badge-buy',   lbl: '買い' },
+    '上昇トレンド': { cls: 'badge-up',    lbl: '上昇' },
+  };
+
+  let rows = '';
+  if (!results.length) {
+    rows = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">
+      買いシグナル・上昇トレンドの銘柄は見つかりませんでした (スキャン対象: ${total}銘柄)
+    </div>`;
+  } else {
+    rows = results.map(d => {
+      const cfg  = signalCfg[d.signal] || { cls: 'badge-watch', lbl: d.signal };
+      const priceFmt = d.current_price != null
+        ? (d.currency === 'JPY' ? d.current_price.toLocaleString('ja-JP') + '円' : '$' + d.current_price.toFixed(2))
+        : '-';
+      const chgCls = (d.change || 0) >= 0 ? 'pos' : 'neg';
+      const chgStr = d.change_pct != null
+        ? `<span class="${chgCls}" style="font-size:11px">${d.change_pct >= 0 ? '+' : ''}${d.change_pct.toFixed(2)}%</span>`
+        : '';
+      const safeT = escapeHtml(d.ticker);
+      // すでにウォッチリストに入っているか
+      const inWL = order && order.includes(d.ticker);
+      const wlBtn = inWL
+        ? `<span style="font-size:10px;color:var(--green)">✓ WL登録済</span>`
+        : `<button onclick="jpDiscAddToWL(event,'${safeT}')" id="jpwl-${safeT}">＋ WL追加</button>`;
+      const scanBtn = `<button onclick="jpDiscAddToScan(event,'${safeT}')" id="jpsc-${safeT}">📋 スキャン追加</button>`;
+      return `<div class="jp-disc-row">
+        <div style="flex:1 1 140px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="badge ${cfg.cls}" style="font-size:9px;padding:1px 5px">${cfg.lbl}</span>
+            <span class="jp-disc-name">${escapeHtml(d.name || d.ticker)}</span>
+          </div>
+          <div class="jp-disc-ticker">${safeT}</div>
+        </div>
+        <div class="jp-disc-price">${priceFmt} ${chgStr}</div>
+        <div class="jp-disc-actions">${wlBtn}${scanBtn}</div>
+      </div>`;
+    }).join('');
+  }
+
+  const updStr = data.updated_at
+    ? new Date(data.updated_at * 1000).toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})
+    : '';
+
+  panel.innerHTML = `
+  <div class="jp-disc-panel">
+    <div class="jp-disc-header">
+      <span class="jp-disc-title">🔍 日本株発掘スキャン</span>
+      <span class="jp-disc-subtitle" style="color:var(--green)">${results.length}銘柄 / スキャン${total}銘柄</span>
+      ${updStr ? `<span class="jp-disc-subtitle">${updStr}</span>` : ''}
+      <button class="btn-sm" onclick="startJpDiscovery()" style="margin-left:auto">↻ 再スキャン</button>
+    </div>
+    <div class="jp-disc-body">${rows}</div>
+  </div>`;
+}
+
+async function jpDiscAddToWL(e, ticker) {
+  e.stopPropagation();
+  const btn = document.getElementById(`jpwl-${ticker}`);
+  if (btn) { btn.disabled = true; btn.textContent = '追加中…'; }
+  try {
+    const res  = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticker }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      order = data.watchlist;
+      if (btn) btn.outerHTML = `<span style="font-size:10px;color:var(--green)">✓ WL登録済</span>`;
+      fetchAndRenderAll();
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '＋ WL追加'; }
+      alert(data.error || '追加に失敗しました');
+    }
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '＋ WL追加'; }
+  }
+}
+
+async function jpDiscAddToScan(e, ticker) {
+  e.stopPropagation();
+  const btn = document.getElementById(`jpsc-${ticker}`);
+  if (btn) { btn.disabled = true; btn.textContent = '追加中…'; }
+  try {
+    const res  = await fetch('/api/scan-list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticker }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      scanListData.custom = data.custom;
+      scanListData.total  = data.total;
+      const el = document.getElementById('scan-total');
+      if (el) el.textContent = `対象: ${data.total}銘柄`;
+      if (btn) btn.outerHTML = `<span style="font-size:10px;color:var(--blue)">✓ スキャン追加済</span>`;
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '📋 スキャン追加'; }
+      if (data.error !== 'すでにスキャンリストに含まれています') alert(data.error || '追加に失敗しました');
+      else if (btn) btn.outerHTML = `<span style="font-size:10px;color:var(--muted)">✓ 登録済</span>`;
+    }
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '📋 スキャン追加'; }
   }
 }
 
