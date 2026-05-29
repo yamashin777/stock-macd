@@ -117,6 +117,34 @@ JP_DISCOVERY_STOCKS = [
     '9005', '9021', '9064', '9201', '9202',
     # エネルギー/公共
     '5019', '5631', '5803', '9503', '9531', '9501', '9532', '9735',
+    # 非鉄金属
+    '5713', '5801', '5714',
+    # その他金融・消費者金融
+    '8591', '8253', '7182',
+    # 食品・飲料追加
+    '2871', '2875', '2897', '2811', '2593',
+    # 化学追加（日用品含む）
+    '3405', '4182', '4004', '4911',
+    # 機械・工作機械追加
+    '6366', '6472', '6592', '6103', '6141', '6448',
+    # 医薬品追加
+    '4506', '4530',
+    # 建設・セメント追加
+    '1720', '1860', '5233',
+    # 陸運追加（大手私鉄）
+    '9048', '9044', '9041', '9042',
+    # 倉庫・運輸
+    '9301', '9302', '9303',
+    # 水産追加
+    '1333',
+    # 小売追加
+    '3086',
+    # IT・テック成長株
+    '4385', '3697', '6526', '6976',
+    # 電機追加
+    '6753',
+    # 繊維
+    '3591',
 ]
 
 # 米国株追加分（S&P500主要）SCAN_STOCKSにない銘柄
@@ -155,6 +183,32 @@ US_DISCOVERY_STOCKS = [
     'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'WELL', 'SPG', 'O', 'VICI',
     # 自動車
     'F', 'GM',
+    # クラウド・SaaS・セキュリティ
+    'CRWD', 'ZS', 'OKTA', 'WDAY', 'VEEV', 'TEAM', 'NET', 'MDB', 'DOCU', 'TTD',
+    # 半導体追加
+    'MPWR', 'ON', 'SWKS', 'MCHP', 'WDC', 'STX',
+    # ヘルスケア追加
+    'MRNA', 'BIIB', 'DXCM', 'PODD', 'IQV', 'HOLX', 'ALGN', 'WAT', 'CRL',
+    # 金融追加（地銀・保険）
+    'MTB', 'FITB', 'RF', 'CFG', 'KEY', 'PRU', 'MET', 'AFL', 'TRV', 'ALL', 'CB',
+    # 産業追加
+    'GWW', 'JCI', 'ROK', 'SWK', 'IR', 'TT', 'LDOS', 'GNRC',
+    # 一般消費財追加
+    'LULU', 'ULTA', 'DECK', 'WSM', 'EBAY', 'ETSY', 'EXPE',
+    # 生活必需品追加
+    'KR', 'HSY', 'MKC', 'CHD', 'CLX', 'BG',
+    # エネルギー追加
+    'OVV', 'MRO', 'HES', 'APA', 'LNG', 'CTRA',
+    # 素材追加
+    'ALB', 'BALL', 'CF', 'MOS', 'IP',
+    # 不動産追加
+    'EXR', 'IRM', 'EQR', 'AVB', 'ARE', 'NNN',
+    # 公共追加
+    'D', 'ED', 'ETR', 'EIX', 'FE', 'PPL',
+    # 通信・メディア追加
+    'PARA', 'LYV', 'OMC',
+    # 自動車追加
+    'RACE', 'STLA',
 ]
 
 JP_DISCOVERY_NAMES = {
@@ -203,6 +257,37 @@ JP_DISCOVERY_NAMES = {
     '5019': '出光興産', '5631': '日本製鋼所', '5803': 'フジクラ',
     '9503': '関西電力', '9531': '東京ガス', '9501': '東京電力HD',
     '9532': '大阪ガス', '9735': 'セコム',
+    # 非鉄金属
+    '5713': '住友金属鉱山', '5801': '古河電工', '5714': 'DOWAホールディングス',
+    # その他金融
+    '8591': 'オリックス', '8253': 'クレディセゾン', '7182': 'ゆうちょ銀行',
+    # 食品・飲料追加
+    '2871': 'ニチレイ', '2875': '東洋水産', '2897': '日清食品HD',
+    '2811': 'カゴメ', '2593': '伊藤園',
+    # 化学追加
+    '3405': 'クラレ', '4182': '三菱ガス化学', '4004': 'レゾナック', '4911': '資生堂',
+    # 機械追加
+    '6366': '千代田化工建設', '6472': 'NTN', '6592': 'マブチモーター',
+    '6103': 'オークマ', '6141': 'DMG森精機', '6448': 'ブラザー工業',
+    # 医薬品追加
+    '4506': '住友ファーマ', '4530': '久光製薬',
+    # 建設追加
+    '1720': '東急建設', '1860': '戸田建設', '5233': '太平洋セメント',
+    # 陸運追加
+    '9048': '名古屋鉄道', '9044': '南海電気鉄道',
+    '9041': '近鉄グループHD', '9042': '阪急阪神HD',
+    # 倉庫・運輸
+    '9301': '三菱倉庫', '9302': '三井倉庫', '9303': '住友倉庫',
+    # 水産追加
+    '1333': 'マルハニチロ',
+    # 小売追加
+    '3086': 'J.フロントリテイリング',
+    # IT・成長株
+    '4385': 'メルカリ', '3697': 'SHIFT', '6526': 'ソシオネクスト', '6976': '太陽誘電',
+    # 電機追加
+    '6753': 'シャープ',
+    # 繊維
+    '3591': 'ワコールHD',
 }
 
 US_DISCOVERY_NAMES = {
@@ -263,6 +348,47 @@ US_DISCOVERY_NAMES = {
     'WELL': 'Welltower', 'SPG': 'Simon Property', 'O': 'Realty Income',
     'VICI': 'VICI Properties',
     'F': 'Ford', 'GM': 'General Motors',
+    # クラウド・SaaS・セキュリティ
+    'CRWD': 'CrowdStrike', 'ZS': 'Zscaler', 'OKTA': 'Okta', 'WDAY': 'Workday',
+    'VEEV': 'Veeva Systems', 'TEAM': 'Atlassian', 'NET': 'Cloudflare',
+    'MDB': 'MongoDB', 'DOCU': 'DocuSign', 'TTD': 'The Trade Desk',
+    # 半導体追加
+    'MPWR': 'Monolithic Power', 'ON': 'ON Semiconductor', 'SWKS': 'Skyworks',
+    'MCHP': 'Microchip Technology', 'WDC': 'Western Digital', 'STX': 'Seagate',
+    # ヘルスケア追加
+    'MRNA': 'Moderna', 'BIIB': 'Biogen', 'DXCM': 'DexCom', 'PODD': 'Insulet',
+    'IQV': 'IQVIA', 'HOLX': 'Hologic', 'ALGN': 'Align Technology',
+    'WAT': 'Waters Corp', 'CRL': 'Charles River',
+    # 金融追加
+    'MTB': 'M&T Bank', 'FITB': 'Fifth Third', 'RF': 'Regions Financial',
+    'CFG': 'Citizens Financial', 'KEY': 'KeyCorp', 'PRU': 'Prudential',
+    'MET': 'MetLife', 'AFL': 'Aflac', 'TRV': 'Travelers', 'ALL': 'Allstate', 'CB': 'Chubb',
+    # 産業追加
+    'GWW': 'W.W. Grainger', 'JCI': 'Johnson Controls', 'ROK': 'Rockwell Automation',
+    'SWK': 'Stanley Black & Decker', 'IR': 'Ingersoll Rand', 'TT': 'Trane Technologies',
+    'LDOS': 'Leidos', 'GNRC': 'Generac',
+    # 一般消費財追加
+    'LULU': 'Lululemon', 'ULTA': 'Ulta Beauty', 'DECK': 'Deckers',
+    'WSM': 'Williams-Sonoma', 'EBAY': 'eBay', 'ETSY': 'Etsy', 'EXPE': 'Expedia',
+    # 生活必需品追加
+    'KR': 'Kroger', 'HSY': 'Hershey', 'MKC': 'McCormick',
+    'CHD': 'Church & Dwight', 'CLX': 'Clorox', 'BG': 'Bunge',
+    # エネルギー追加
+    'OVV': 'Ovintiv', 'MRO': 'Marathon Oil', 'HES': 'Hess',
+    'APA': 'APA Corp', 'LNG': 'Cheniere Energy', 'CTRA': 'Coterra Energy',
+    # 素材追加
+    'ALB': 'Albemarle', 'BALL': 'Ball Corp', 'CF': 'CF Industries',
+    'MOS': 'Mosaic', 'IP': 'International Paper',
+    # 不動産追加
+    'EXR': 'Extra Space Storage', 'IRM': 'Iron Mountain', 'EQR': 'Equity Residential',
+    'AVB': 'AvalonBay', 'ARE': 'Alexandria Real Estate', 'NNN': 'NNN REIT',
+    # 公共追加
+    'D': 'Dominion Energy', 'ED': 'Con Edison', 'ETR': 'Entergy',
+    'EIX': 'Edison International', 'FE': 'FirstEnergy', 'PPL': 'PPL Corp',
+    # 通信・メディア追加
+    'PARA': 'Paramount Global', 'LYV': 'Live Nation', 'OMC': 'Omnicom',
+    # 自動車追加
+    'RACE': 'Ferrari', 'STLA': 'Stellantis',
 }
 
 # ── セクター分類辞書（全発掘スキャン対象 + SCAN_STOCKS）─────────────────────────
@@ -377,6 +503,44 @@ DISC_SECTORS = {
     'PSA':'不動産', 'DLR':'不動産', 'WELL':'不動産', 'SPG':'不動産',
     'O':'不動産', 'VICI':'不動産',
     'F':'自動車', 'GM':'自動車',
+    # JP追加分
+    '5713':'非鉄金属', '5801':'非鉄金属', '5714':'非鉄金属',
+    '8591':'その他金融', '8253':'その他金融', '7182':'金融',
+    '2871':'食品', '2875':'食品', '2897':'食品', '2811':'食品', '2593':'食品',
+    '3405':'化学', '4182':'化学', '4004':'化学', '4911':'化学',
+    '6366':'機械', '6472':'機械', '6592':'機械', '6103':'機械', '6141':'機械',
+    '6448':'電機', '4506':'医薬品', '4530':'医薬品',
+    '1720':'建設', '1860':'建設', '5233':'素材',
+    '9048':'交通', '9044':'交通', '9041':'交通', '9042':'交通',
+    '9301':'物流', '9302':'物流', '9303':'物流',
+    '1333':'食品', '3086':'小売',
+    '4385':'IT・通信', '3697':'IT・通信', '6526':'半導体', '6976':'電子部品',
+    '6753':'電機', '3591':'繊維',
+    # US追加分
+    'CRWD':'テクノロジー', 'ZS':'テクノロジー', 'OKTA':'テクノロジー',
+    'WDAY':'テクノロジー', 'VEEV':'テクノロジー', 'TEAM':'テクノロジー',
+    'NET':'テクノロジー', 'MDB':'テクノロジー', 'DOCU':'テクノロジー', 'TTD':'テクノロジー',
+    'MPWR':'テクノロジー', 'ON':'テクノロジー', 'SWKS':'テクノロジー',
+    'MCHP':'テクノロジー', 'WDC':'テクノロジー', 'STX':'テクノロジー',
+    'MRNA':'ヘルスケア', 'BIIB':'ヘルスケア', 'DXCM':'ヘルスケア', 'PODD':'ヘルスケア',
+    'IQV':'ヘルスケア', 'HOLX':'ヘルスケア', 'ALGN':'ヘルスケア',
+    'WAT':'ヘルスケア', 'CRL':'ヘルスケア',
+    'MTB':'金融', 'FITB':'金融', 'RF':'金融', 'CFG':'金融', 'KEY':'金融',
+    'PRU':'金融', 'MET':'金融', 'AFL':'金融', 'TRV':'金融', 'ALL':'金融', 'CB':'金融',
+    'GWW':'産業', 'JCI':'産業', 'ROK':'産業', 'SWK':'産業', 'IR':'産業',
+    'TT':'産業', 'LDOS':'産業', 'GNRC':'産業',
+    'LULU':'一般消費財', 'ULTA':'一般消費財', 'DECK':'一般消費財',
+    'WSM':'一般消費財', 'EBAY':'一般消費財', 'ETSY':'一般消費財', 'EXPE':'一般消費財',
+    'KR':'生活必需品', 'HSY':'生活必需品', 'MKC':'生活必需品',
+    'CHD':'生活必需品', 'CLX':'生活必需品', 'BG':'生活必需品',
+    'OVV':'エネルギー', 'MRO':'エネルギー', 'HES':'エネルギー',
+    'APA':'エネルギー', 'LNG':'エネルギー', 'CTRA':'エネルギー',
+    'ALB':'素材', 'BALL':'素材', 'CF':'素材', 'MOS':'素材', 'IP':'素材',
+    'EXR':'不動産', 'IRM':'不動産', 'EQR':'不動産', 'AVB':'不動産',
+    'ARE':'不動産', 'NNN':'不動産',
+    'D':'公共', 'ED':'公共', 'ETR':'公共', 'EIX':'公共', 'FE':'公共', 'PPL':'公共',
+    'PARA':'通信・メディア', 'LYV':'通信・メディア', 'OMC':'通信・メディア',
+    'RACE':'自動車', 'STLA':'自動車',
 }
 
 SUPABASE_URL       = os.environ.get('SUPABASE_URL', '')
