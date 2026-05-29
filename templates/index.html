@@ -479,6 +479,12 @@ header {
   cursor: pointer; transition: opacity .15s;
 }
 .scan-sig-badge:hover { opacity: .75; }
+/* モバイル用バッジ: デスクトップ非表示 / モバイルでチャート右隣に表示 */
+.scan-badge-mob { display: none; flex-shrink: 0; }
+@media (max-width: 600px) {
+  .scan-badge-desk { display: none !important; }
+  .scan-badge-mob  { display: inline-block; }
+}
 /* デスクトップでチャートを広く */
 @media (min-width: 600px) {
   .scan-inline-chart { flex: 0 0 160px; }
@@ -1460,19 +1466,58 @@ let _scanPolling = false;
 
 async function loadScan(force = false) {
   document.getElementById('scan-toolbar').style.display = 'none';
-  _showScanLoading(0);
+  _showScanLoading(0, null);
   _scanPolling = true;
   await _pollScan(force, Date.now());
 }
 
-function _showScanLoading(elapsed) {
-  const el = document.getElementById('scan-content');
+function _showScanLoading(elapsed, d) {
+  const el  = document.getElementById('scan-content');
   const sec = Math.round(elapsed / 1000);
-  el.innerHTML = `<div class="sig-empty">
-    📡 スキャン中です… ${sec > 0 ? `(${sec}秒経過)` : ''}<br>
-    <span style="font-size:11px;margin-top:8px;display:block">
-      約90銘柄のMACDを計算しています。初回は60秒ほどかかります。
-    </span>
+  const min = Math.floor(sec / 60);
+  const s   = sec % 60;
+  const elapsedStr = sec > 0 ? (min > 0 ? `${min}分${s}秒` : `${sec}秒`) : '';
+
+  const phase      = d && d.phase       || '';
+  const total      = d && d.total       || 0;
+  const done       = d && d.done        || 0;
+  const earnTotal  = d && d.earn_total  || 0;
+  const earnDone   = d && d.earn_done   || 0;
+  const earnCur    = d && d.earn_current|| '';
+
+  let phaseLabel = '📡 スキャン準備中…';
+  let pct = 0;
+  let subText = '';
+  let curLabel = '';
+
+  if (phase === 'prices') {
+    phaseLabel = '📊 MACDデータ取得中';
+    pct     = total > 0 ? (done / total) * 100 : 0;
+    subText = total > 0 ? `${done} / ${total} 銘柄` : '';
+  } else if (phase === 'prices_done' || phase === 'cooldown') {
+    phaseLabel = '⏳ クールダウン中（レート制限リセット待ち）';
+    pct     = 100;
+    subText = '価格データ取得完了 — 決算日取得を準備中';
+  } else if (phase === 'earnings') {
+    phaseLabel = '📅 決算日取得中';
+    pct     = earnTotal > 0 ? (earnDone / earnTotal) * 100 : 0;
+    subText = earnTotal > 0 ? `${earnDone} / ${earnTotal} 銘柄` : '';
+    curLabel = earnCur || '';
+  }
+
+  const bar = `
+    <div style="background:var(--border);border-radius:4px;height:6px;
+                width:220px;margin:10px auto 4px;overflow:hidden">
+      <div style="background:var(--blue);width:${Math.min(pct,100).toFixed(0)}%;
+                  height:100%;border-radius:4px;transition:width .4s"></div>
+    </div>`;
+
+  el.innerHTML = `<div class="sig-empty" style="padding:28px 0;line-height:1.7">
+    <div style="font-size:14px;font-weight:600">${phaseLabel}</div>
+    ${bar}
+    ${subText  ? `<div style="font-size:11px;color:var(--muted)">${subText}</div>` : ''}
+    ${curLabel ? `<div style="font-size:10px;color:var(--muted)">処理中: <span style="color:var(--blue)">${curLabel}</span></div>` : ''}
+    ${elapsedStr ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">経過 ${elapsedStr}</div>` : ''}
   </div>`;
 }
 
@@ -1489,7 +1534,7 @@ async function _pollScan(force, startTime) {
       renderScanView();
     } else {
       // まだ実行中 → 3秒後に再確認
-      _showScanLoading(Date.now() - startTime);
+      _showScanLoading(Date.now() - startTime, data);
       setTimeout(() => _pollScan(false, startTime), 3000);
     }
   } catch(e) {
@@ -1668,10 +1713,11 @@ function renderScanView() {
             </div>
             <div class="sig-ticker-row">
               <span class="sig-ticker">${d.ticker}</span>
-              <span class="badge ${cfg.cls} scan-sig-badge" onclick="setScanSort('signal')" title="シグナルでソート" style="font-size:9px;padding:1px 5px;margin-left:4px">${cfg.lbl}</span>
+              <span class="badge ${cfg.cls} scan-sig-badge scan-badge-desk" onclick="setScanSort('signal')" title="シグナルでソート" style="font-size:9px;padding:1px 5px;margin-left:4px">${cfg.lbl}</span>
             </div>
           </div>
           ${chart}
+          <span class="badge ${cfg.cls} scan-sig-badge scan-badge-mob" onclick="setScanSort('signal')" title="シグナルでソート" style="font-size:9px;padding:1px 5px">${cfg.lbl}</span>
         </div>
       </td>
       <td class="sig-price">${s}${fmtPrice(d.current_price, d.currency)}<br>

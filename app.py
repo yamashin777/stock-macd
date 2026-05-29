@@ -504,7 +504,10 @@ def update_metadata(ticker):
 
 # ── スキャン バックグラウンドスレッド管理 ─────────────────────────────────────
 _scan_lock  = threading.Lock()
-_scan_state = {'status': 'idle', 'results': None, 'updated_at': 0, 'phase': ''}
+_scan_state = {'status': 'idle', 'results': None, 'updated_at': 0, 'phase': '',
+               'total': 0, 'done': 0,
+               'earn_total': 0, 'earn_done': 0, 'earn_current': '',
+               'start_time': 0}
 
 def load_auto_scan_list():
     """Supabaseから自動取得済み値上がり銘柄リストを返す (stocks, updated_at)"""
@@ -629,43 +632,63 @@ def _invalidate_scan_cache():
 
 
 def _run_scan_thread():
+    start_time = time.time()
     with _scan_lock:
-        _scan_state['phase'] = 'prices'
+        _scan_state.update({'phase': 'prices', 'start_time': start_time,
+                            'done': 0, 'total': 0, 'earn_done': 0,
+                            'earn_total': 0, 'earn_current': ''})
+
     all_stocks, _ = load_scan_list()
+    total = len(all_stocks)
+    with _scan_lock:
+        _scan_state['total'] = total
+
     results = []
+    _counter = [0]   # mutable counter shared across worker threads
+
     def safe(t):
-        try: return scan_stock_data(t)
-        except: return None
+        try:
+            r = scan_stock_data(t)
+        except Exception:
+            r = None
+        with _scan_lock:
+            _counter[0] += 1
+            _scan_state['done'] = _counter[0]
+        return r
+
     with ThreadPoolExecutor(max_workers=12) as ex:
         for data in ex.map(safe, all_stocks):
             if data:
                 results.append(data)
 
     # ── フェーズ1完了: 価格/MACDデータを先に保存 ──────────────────────────────
-    # 決算フェーズでクラッシュしても価格データは確実に見えるようにする
     prices_at = time.time()
     if SUPABASE_URL and SUPABASE_KEY:
         _sb_save('scan_cache', {'results': results, 'updated_at': prices_at})
     with _scan_lock:
         _scan_state.update({'status': 'done', 'phase': 'prices_done',
-                            'results': list(results), 'updated_at': prices_at})
+                            'results': list(results), 'updated_at': prices_at,
+                            'done': total})
 
     # ── フェーズ2: 決算日を順次取得 ───────────────────────────────────────────
-    # 並列スキャン直後はレート制限リセット待ち（90秒クールダウン）
     with _scan_lock:
         _scan_state['phase'] = 'cooldown'
     time.sleep(90)
 
-    with _scan_lock:
-        _scan_state['phase'] = 'earnings'
-
-    # 買い・上昇トレンドを優先して最大60銘柄に絞る（OOM対策）
     EARN_RANK = {'買い': 0, '上昇トレンド': 1, '様子見': 2, '下降トレンド': 3, '売り': 4}
     earnings_targets = sorted(results, key=lambda r: EARN_RANK.get(r.get('signal', ''), 5))[:60]
-    print(f'[scan] 決算日取得対象: {len(earnings_targets)}/{len(results)}銘柄')
+    earn_total = len(earnings_targets)
+    print(f'[scan] 決算日取得対象: {earn_total}/{len(results)}銘柄')
+
+    with _scan_lock:
+        _scan_state.update({'phase': 'earnings', 'earn_total': earn_total,
+                            'earn_done': 0, 'earn_current': ''})
 
     earnings_ok = 0
-    for r in earnings_targets:
+    for i, r in enumerate(earnings_targets):
+        with _scan_lock:
+            _scan_state['earn_done'] = i
+            _scan_state['earn_current'] = r['ticker']
         try:
             e = fetch_next_earnings(normalize_ticker(r['ticker']))
             r['next_earnings'] = e
@@ -674,16 +697,17 @@ def _run_scan_thread():
         except Exception:
             pass
         gc.collect()
-        _malloc_trim()   # Pythonのfreeメモリを即座にOSへ返却
+        _malloc_trim()
         time.sleep(2)
 
-    print(f'[scan] 決算日取得: {earnings_ok}/{len(earnings_targets)}件')
+    print(f'[scan] 決算日取得: {earnings_ok}/{earn_total}件')
     updated_at = time.time()
     if SUPABASE_URL and SUPABASE_KEY:
         _sb_save('scan_cache', {'results': results, 'updated_at': updated_at})
     with _scan_lock:
         _scan_state.update({'status': 'done', 'phase': 'done',
-                            'results': results, 'updated_at': updated_at})
+                            'results': results, 'updated_at': updated_at,
+                            'earn_done': earn_total})
 
 
 @app.route('/api/scan')
@@ -722,7 +746,16 @@ def scan_signals():
         t = threading.Thread(target=_run_scan_thread, daemon=True)
         t.start()
 
-    return jsonify({'status': 'running'})
+    return jsonify({
+        'status': 'running',
+        'phase':       state.get('phase', ''),
+        'total':       state.get('total', 0),
+        'done':        state.get('done', 0),
+        'earn_total':  state.get('earn_total', 0),
+        'earn_done':   state.get('earn_done', 0),
+        'earn_current':state.get('earn_current', ''),
+        'start_time':  state.get('start_time', 0),
+    })
 
 
 @app.route('/api/scan-list', methods=['GET'])
