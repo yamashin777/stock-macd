@@ -383,9 +383,43 @@ SUPABASE_URL       = os.environ.get('SUPABASE_URL', '')
 SUPABASE_KEY       = os.environ.get('SUPABASE_KEY', '')
 GEMINI_API_KEY     = os.environ.get('GEMINI_API_KEY', '')
 
-# ── AI解説キャッシュ（ticker → {text, ts}）──────────────────────────────────
+# ── AI解説キャッシュ（永続化 + メモリキャッシュ）────────────────────────────
+AI_COMMENTS_FILE = 'ai_comments.json'
+_AI_CACHE_TTL    = 14 * 24 * 3600   # 2週間
+
+
+def _load_ai_comments() -> dict:
+    """ai_comments.json または Supabase から読み込む（古いエントリは除外）"""
+    data: dict = {}
+    if SUPABASE_URL and SUPABASE_KEY:
+        sb = _sb_load('ai_comments')
+        if isinstance(sb, dict):
+            data = sb
+    if not data:
+        try:
+            with open(AI_COMMENTS_FILE, encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    # 期限切れエントリを除去してから返す
+    now = time.time()
+    return {k: v for k, v in data.items()
+            if isinstance(v, dict) and now - v.get('ts', 0) < _AI_CACHE_TTL}
+
+
+def _save_ai_comments(cache: dict) -> None:
+    """ai_comments.json と Supabase に保存"""
+    try:
+        with open(AI_COMMENTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f'[ai_comments] save error: {e}')
+    if SUPABASE_URL and SUPABASE_KEY:
+        _sb_save('ai_comments', cache)
+
+
+# 起動時にキャッシュをファイルから読み込む（Supabase/_sb_load使用のため後で初期化）
 _ai_cache: dict = {}
-_AI_CACHE_TTL   = 3600  # 1時間
 
 
 def _sb_headers():
@@ -883,6 +917,7 @@ MACD値: {macd_val:+.4f}
         if resp.status_code == 200:
             text = resp.json()['candidates'][0]['content']['parts'][0]['text']
             _ai_cache[ticker] = {'text': text, 'ts': time.time()}
+            _save_ai_comments(_ai_cache)   # ファイルに永続保存
             return jsonify({'comment': text})
         elif resp.status_code == 429:
             return jsonify({'error': (
@@ -1535,6 +1570,10 @@ def debug_scan_status():
         'supabase_updated_at': sb_updated_at,
     })
 
+
+# ── 起動時初期化 ──────────────────────────────────────────────────────────────
+_ai_cache.update(_load_ai_comments())
+print(f'[startup] AI解説キャッシュ読み込み: {len(_ai_cache)}件')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
