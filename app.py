@@ -505,8 +505,8 @@ def update_metadata(ticker):
 # ── スキャン バックグラウンドスレッド管理 ─────────────────────────────────────
 _scan_lock  = threading.Lock()
 _scan_state = {'status': 'idle', 'results': None, 'updated_at': 0, 'phase': '',
-               'total': 0, 'done': 0,
-               'earn_total': 0, 'earn_done': 0, 'earn_current': '',
+               'total': 0, 'done': 0, 'current': '', 'current_name': '',
+               'earn_total': 0, 'earn_done': 0, 'earn_current': '', 'earn_current_name': '',
                'start_time': 0}
 
 def load_auto_scan_list():
@@ -635,8 +635,9 @@ def _run_scan_thread():
     start_time = time.time()
     with _scan_lock:
         _scan_state.update({'phase': 'prices', 'start_time': start_time,
-                            'done': 0, 'total': 0, 'earn_done': 0,
-                            'earn_total': 0, 'earn_current': ''})
+                            'done': 0, 'total': 0, 'current': '', 'current_name': '',
+                            'earn_done': 0, 'earn_total': 0,
+                            'earn_current': '', 'earn_current_name': ''})
 
     all_stocks, _ = load_scan_list()
     total = len(all_stocks)
@@ -647,6 +648,10 @@ def _run_scan_thread():
     _counter = [0]   # mutable counter shared across worker threads
 
     def safe(t):
+        name = STOCK_NAMES.get(t, t)
+        with _scan_lock:
+            _scan_state['current']      = t
+            _scan_state['current_name'] = name
         try:
             r = scan_stock_data(t)
         except Exception:
@@ -682,13 +687,14 @@ def _run_scan_thread():
 
     with _scan_lock:
         _scan_state.update({'phase': 'earnings', 'earn_total': earn_total,
-                            'earn_done': 0, 'earn_current': ''})
+                            'earn_done': 0, 'earn_current': '', 'earn_current_name': ''})
 
     earnings_ok = 0
     for i, r in enumerate(earnings_targets):
         with _scan_lock:
-            _scan_state['earn_done'] = i
-            _scan_state['earn_current'] = r['ticker']
+            _scan_state['earn_done']         = i
+            _scan_state['earn_current']      = r['ticker']
+            _scan_state['earn_current_name'] = STOCK_NAMES.get(r['ticker'], r['ticker'])
         try:
             e = fetch_next_earnings(normalize_ticker(r['ticker']))
             r['next_earnings'] = e
@@ -747,14 +753,17 @@ def scan_signals():
         t.start()
 
     return jsonify({
-        'status': 'running',
-        'phase':       state.get('phase', ''),
-        'total':       state.get('total', 0),
-        'done':        state.get('done', 0),
-        'earn_total':  state.get('earn_total', 0),
-        'earn_done':   state.get('earn_done', 0),
-        'earn_current':state.get('earn_current', ''),
-        'start_time':  state.get('start_time', 0),
+        'status':           'running',
+        'phase':            state.get('phase', ''),
+        'total':            state.get('total', 0),
+        'done':             state.get('done', 0),
+        'current':          state.get('current', ''),
+        'current_name':     state.get('current_name', ''),
+        'earn_total':       state.get('earn_total', 0),
+        'earn_done':        state.get('earn_done', 0),
+        'earn_current':     state.get('earn_current', ''),
+        'earn_current_name':state.get('earn_current_name', ''),
+        'start_time':       state.get('start_time', 0),
     })
 
 
