@@ -78,21 +78,21 @@ STOCK_NAMES = {
 }
 SCAN_CACHE_TTL = 12 * 3600  # 12時間
 
-# ── 発掘スキャン対象（SCAN_STOCKSにない銘柄）──────────────────────────────────
-# 日本株: 日経225相当 ~120銘柄
+# ── 発掘スキャン対象 ─────────────────────────────────────────────────────────
+# 日本株追加分（日経225 + 主要TOPIX）SCAN_STOCKSにない銘柄
 JP_DISCOVERY_STOCKS = [
-    # 重工/機械
-    '7011', '7012', '7013', '6302', '6305', '6361', '6383',
+    # 重工業
+    '7011', '7012', '7013', '6302', '6305', '6361', '6383', '6113',
     # 電子部品/半導体
     '6981', '6762', '6723', '6857', '6971', '6963', '6770', '4062',
-    '6146', '6273', '6479', '6481', '6504', '6506', '6594',
+    '6146', '6273', '6479', '6481', '6504', '6506', '6594', '7735',
     # 電機
     '6701', '6724', '6841', '6952', '6988',
     # 化学/素材
     '4063', '4188', '4183', '4042', '3402', '4005', '4021', '4061', '4091', '4208',
-    '3407', '3436', '5201', '5333', '5411', '5802',
-    # 富士フイルム/精密
-    '4901', '7733', '7731', '4543',
+    '3407', '3436', '5201', '5333', '5411', '5802', '4631', '3105', '3401', '3861',
+    # 精密機器
+    '4901', '7733', '7731', '4543', '7762',
     # 食品/飲料/水産
     '2503', '2502', '2801', '2269', '4452', '2282', '1332', '2002',
     # 不動産
@@ -101,58 +101,71 @@ JP_DISCOVERY_STOCKS = [
     '8750', '8725', '8308', '8354', '7186', '8309', '8601', '8630', '8697',
     # 海運
     '9101', '9104', '9107',
-    # 自動車/部品
-    '5108', '7270', '7269', '6471', '5110', '8015', '7211', '7261', '7272',
-    # 製薬
+    # 自動車/タイヤ
+    '5108', '7270', '7269', '6471', '5110', '8015', '7211', '7261', '7272', '5101',
+    # 医薬品
     '4507', '4527', '4536', '4151',
     # IT/サービス/エンタメ
-    '4307', '9613', '2432', '4689', '4324', '6460', '7951',
+    '4307', '9613', '2432', '4689', '4324', '6460', '7951', '3659', '1721',
     # 小売
-    '9983', '2651', '3099', '8233', '3048', '9831',
+    '9983', '2651', '3099', '8233', '3048', '9831', '8252',
     # 商社
-    '8001', '8053',
+    '8001', '8053', '2768',
     # 建設
     '1801', '1802', '1803', '1812', '1928', '1925',
     # 交通/物流
     '9005', '9021', '9064', '9201', '9202',
     # エネルギー/公共
-    '5019', '5631', '9503', '9531', '9735',
+    '5019', '5631', '5803', '9503', '9531', '9501', '9532', '9735',
 ]
 
-# 米国株: S&P500相当 ~65銘柄
+# 米国株追加分（S&P500主要）SCAN_STOCKSにない銘柄
 US_DISCOVERY_STOCKS = [
+    # テクノロジー
+    'INTC', 'QCOM', 'TXN', 'MU', 'LRCX', 'AMAT', 'KLAC', 'ADI', 'MRVL', 'NXPI',
+    'ADBE', 'NOW', 'INTU', 'ADSK', 'CDNS', 'SNPS', 'ANSS', 'FTNT', 'CTSH',
+    'HPQ', 'HPE', 'NTAP', 'MSI', 'GLW', 'APH',
+    'PYPL', 'UBER', 'PLTR', 'SNOW', 'DDOG', 'ABNB',
     # 金融
     'GS', 'MS', 'C', 'WFC', 'BLK', 'AXP', 'SCHW', 'USB',
-    # ヘルスケア/医療機器
+    'CME', 'ICE', 'SPGI', 'MCO', 'AON', 'MMC', 'FI', 'FIS', 'GPN',
+    'STT', 'BK', 'BX', 'KKR', 'AMP',
+    # ヘルスケア
     'TMO', 'DHR', 'ISRG', 'MDT', 'BSX', 'SYK', 'ABT',
     'AMGN', 'GILD', 'BMY', 'PFE', 'REGN', 'VRTX',
-    # テクノロジー
-    'INTC', 'QCOM', 'TXN', 'MU', 'LRCX', 'AMAT', 'KLAC',
-    'ADBE', 'NOW', 'PYPL', 'UBER', 'PLTR', 'SNOW', 'DDOG',
+    'ELV', 'HCA', 'CVS', 'CI', 'HUM', 'ZTS', 'BDX', 'IDXX', 'EW', 'RMD',
+    # 一般消費財
+    'NKE', 'SBUX', 'MCD', 'CMG', 'TGT', 'LOW', 'TJX',
+    'BKNG', 'MAR', 'HLT', 'ROST', 'ORLY', 'AZO', 'DHI', 'LEN', 'YUM', 'DRI', 'GRMN',
+    # 通信/メディア
+    'T', 'VZ', 'TMUS', 'CMCSA', 'CHTR', 'EA', 'TTWO',
+    # 生活必需品
+    'MDLZ', 'PM', 'MO', 'CL', 'GIS', 'KMB', 'STZ', 'SYY', 'ADM',
     # 産業/防衛
     'CAT', 'DE', 'HON', 'ETN', 'GE', 'RTX', 'LMT', 'NOC', 'EMR',
-    # 消費/小売
-    'NKE', 'SBUX', 'MCD', 'CMG', 'TGT', 'LOW', 'TJX',
-    # 通信/メディア
-    'T', 'VZ', 'TMUS', 'CMCSA',
+    'UPS', 'FDX', 'UNP', 'NSC', 'CSX', 'PH', 'ITW', 'ADP', 'WM', 'RSG',
+    'MMM', 'BA', 'FAST', 'CTAS', 'OTIS', 'CARR',
     # エネルギー
-    'COP', 'SLB', 'PSX',
-    # 公共/不動産
-    'NEE', 'DUK', 'AMT', 'PLD',
+    'COP', 'SLB', 'PSX', 'EOG', 'OXY', 'VLO', 'MPC', 'KMI', 'WMB', 'DVN', 'HAL',
+    # 素材
+    'LIN', 'APD', 'ECL', 'SHW', 'NUE', 'FCX', 'PPG', 'NEM', 'DD', 'DOW',
+    # 公共
+    'NEE', 'DUK', 'SO', 'AEP', 'EXC', 'XEL', 'WEC',
+    # 不動産
+    'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'WELL', 'SPG', 'O', 'VICI',
     # 自動車
     'F', 'GM',
-    # その他
-    'ABNB',
 ]
 
 JP_DISCOVERY_NAMES = {
     '7011': '三菱重工業', '7012': '川崎重工業', '7013': 'IHI',
-    '6302': '住友重機械工業', '6305': '日立建機', '6361': '荏原製作所', '6383': 'ダイフク',
+    '6302': '住友重機械工業', '6305': '日立建機', '6361': '荏原製作所',
+    '6383': 'ダイフク', '6113': 'アマダ',
     '6981': '村田製作所', '6762': 'TDK', '6723': 'ルネサスエレクトロニクス',
     '6857': 'アドバンテスト', '6971': '京セラ', '6963': 'ローム',
     '6770': 'アルプスアルパイン', '4062': 'イビデン',
     '6146': 'ディスコ', '6273': 'SMC', '6479': 'ミネベアミツミ',
-    '6481': 'THK', '6504': '富士電機', '6506': '安川電機', '6594': 'ニデック',
+    '6481': 'THK', '6504': '富士電機', '6506': '安川電機', '6594': 'ニデック', '7735': 'SCREEN HD',
     '6701': 'NEC', '6724': 'セイコーエプソン', '6841': '横河電機',
     '6952': 'カシオ計算機', '6988': '日東電工',
     '4063': '信越化学工業', '4188': '三菱ケミカルグループ', '4183': '三井化学',
@@ -160,7 +173,9 @@ JP_DISCOVERY_NAMES = {
     '4061': 'デンカ', '4091': '日本酸素HD', '4208': 'UBE',
     '3407': '旭化成', '3436': 'SUMCO', '5201': 'AGC', '5333': '日本碍子',
     '5411': 'JFEホールディングス', '5802': '住友電気工業',
-    '4901': '富士フイルムHD', '7733': 'オリンパス', '7731': 'ニコン', '4543': 'テルモ',
+    '4631': 'DIC', '3105': '日清紡HD', '3401': '帝人', '3861': '王子HD',
+    '4901': '富士フイルムHD', '7733': 'オリンパス', '7731': 'ニコン',
+    '4543': 'テルモ', '7762': 'シチズン時計',
     '2503': 'キリンHD', '2502': 'アサヒグループHD', '2801': 'キッコーマン',
     '2269': '明治HD', '4452': '花王', '2282': '日本ハム',
     '1332': 'ニッスイ', '2002': '日清製粉グループ',
@@ -172,44 +187,196 @@ JP_DISCOVERY_NAMES = {
     '9101': '日本郵船', '9104': '商船三井', '9107': '川崎汽船',
     '5108': 'ブリヂストン', '7270': 'SUBARU', '7269': 'スズキ',
     '6471': 'NSK（日本精工）', '5110': '住友ゴム工業', '8015': '豊田通商',
-    '7211': '三菱自動車工業', '7261': 'マツダ', '7272': 'ヤマハ発動機',
+    '7211': '三菱自動車工業', '7261': 'マツダ', '7272': 'ヤマハ発動機', '5101': '横浜ゴム',
     '4507': '塩野義製薬', '4527': 'ロート製薬', '4536': '参天製薬', '4151': '協和キリン',
     '4307': '野村総合研究所', '9613': 'NTTデータグループ',
     '2432': 'DeNA', '4689': 'LINEヤフー', '4324': '電通グループ',
-    '6460': 'セガサミーHD', '7951': 'ヤマハ',
+    '6460': 'セガサミーHD', '7951': 'ヤマハ', '3659': 'ネクソン', '1721': 'コムシスHD',
     '9983': 'ファーストリテイリング', '2651': 'ローソン',
-    '3099': '三越伊勢丹HD', '8233': '高島屋', '3048': 'ビックカメラ', '9831': 'ヤマダHD',
-    '8001': '伊藤忠商事', '8053': '住友商事',
+    '3099': '三越伊勢丹HD', '8233': '高島屋', '3048': 'ビックカメラ',
+    '9831': 'ヤマダHD', '8252': '丸井グループ',
+    '8001': '伊藤忠商事', '8053': '住友商事', '2768': '双日',
     '1801': '大成建設', '1802': '大林組', '1803': '清水建設',
     '1812': '鹿島建設', '1928': '積水ハウス', '1925': '大和ハウス工業',
     '9005': '東急', '9021': 'JR西日本', '9064': 'ヤマトHD',
     '9201': '日本航空（JAL）', '9202': 'ANAホールディングス',
-    '5019': '出光興産', '5631': '日本製鋼所',
-    '9503': '関西電力', '9531': '東京ガス', '9735': 'セコム',
+    '5019': '出光興産', '5631': '日本製鋼所', '5803': 'フジクラ',
+    '9503': '関西電力', '9531': '東京ガス', '9501': '東京電力HD',
+    '9532': '大阪ガス', '9735': 'セコム',
 }
 
 US_DISCOVERY_NAMES = {
+    'INTC': 'Intel', 'QCOM': 'Qualcomm', 'TXN': 'Texas Instruments', 'MU': 'Micron',
+    'LRCX': 'Lam Research', 'AMAT': 'Applied Materials', 'KLAC': 'KLA Corp',
+    'ADI': 'Analog Devices', 'MRVL': 'Marvell Technology', 'NXPI': 'NXP Semiconductors',
+    'ADBE': 'Adobe', 'NOW': 'ServiceNow', 'INTU': 'Intuit', 'ADSK': 'Autodesk',
+    'CDNS': 'Cadence Design', 'SNPS': 'Synopsys', 'ANSS': 'Ansys',
+    'FTNT': 'Fortinet', 'CTSH': 'Cognizant', 'HPQ': 'HP Inc', 'HPE': 'Hewlett Packard Enterprise',
+    'NTAP': 'NetApp', 'MSI': 'Motorola Solutions', 'GLW': 'Corning', 'APH': 'Amphenol',
+    'PYPL': 'PayPal', 'UBER': 'Uber', 'PLTR': 'Palantir', 'SNOW': 'Snowflake',
+    'DDOG': 'Datadog', 'ABNB': 'Airbnb',
     'GS': 'Goldman Sachs', 'MS': 'Morgan Stanley', 'C': 'Citigroup',
     'WFC': 'Wells Fargo', 'BLK': 'BlackRock', 'AXP': 'American Express',
     'SCHW': 'Charles Schwab', 'USB': 'U.S. Bancorp',
+    'CME': 'CME Group', 'ICE': 'Intercontinental Exchange', 'SPGI': 'S&P Global',
+    'MCO': "Moody's", 'AON': 'Aon', 'MMC': 'Marsh McLennan',
+    'FI': 'Fiserv', 'FIS': 'Fidelity National Info', 'GPN': 'Global Payments',
+    'STT': 'State Street', 'BK': 'Bank of New York Mellon', 'BX': 'Blackstone',
+    'KKR': 'KKR & Co', 'AMP': 'Ameriprise Financial',
     'TMO': 'Thermo Fisher', 'DHR': 'Danaher', 'ISRG': 'Intuitive Surgical',
     'MDT': 'Medtronic', 'BSX': 'Boston Scientific', 'SYK': 'Stryker', 'ABT': 'Abbott',
     'AMGN': 'Amgen', 'GILD': 'Gilead Sciences', 'BMY': 'Bristol-Myers Squibb',
     'PFE': 'Pfizer', 'REGN': 'Regeneron', 'VRTX': 'Vertex Pharmaceuticals',
-    'INTC': 'Intel', 'QCOM': 'Qualcomm', 'TXN': 'Texas Instruments', 'MU': 'Micron',
-    'LRCX': 'Lam Research', 'AMAT': 'Applied Materials', 'KLAC': 'KLA Corporation',
-    'ADBE': 'Adobe', 'NOW': 'ServiceNow', 'PYPL': 'PayPal',
-    'UBER': 'Uber', 'PLTR': 'Palantir', 'SNOW': 'Snowflake', 'DDOG': 'Datadog',
-    'CAT': 'Caterpillar', 'DE': 'Deere & Co', 'HON': 'Honeywell',
-    'ETN': 'Eaton', 'GE': 'GE Aerospace', 'RTX': 'RTX (Raytheon)',
-    'LMT': 'Lockheed Martin', 'NOC': 'Northrop Grumman', 'EMR': 'Emerson Electric',
-    'NKE': 'Nike', 'SBUX': 'Starbucks', 'MCD': "McDonald's",
-    'CMG': 'Chipotle', 'TGT': 'Target', 'LOW': "Lowe's", 'TJX': 'TJX Companies',
+    'ELV': 'Elevance Health', 'HCA': 'HCA Healthcare', 'CVS': 'CVS Health',
+    'CI': 'Cigna', 'HUM': 'Humana', 'ZTS': 'Zoetis', 'BDX': 'Becton Dickinson',
+    'IDXX': 'IDEXX Laboratories', 'EW': 'Edwards Lifesciences', 'RMD': 'ResMed',
+    'NKE': 'Nike', 'SBUX': 'Starbucks', 'MCD': "McDonald's", 'CMG': 'Chipotle',
+    'TGT': 'Target', 'LOW': "Lowe's", 'TJX': 'TJX Companies',
+    'BKNG': 'Booking Holdings', 'MAR': 'Marriott', 'HLT': 'Hilton',
+    'ROST': 'Ross Stores', 'ORLY': "O'Reilly Auto", 'AZO': 'AutoZone',
+    'DHI': 'D.R. Horton', 'LEN': 'Lennar', 'YUM': 'Yum! Brands',
+    'DRI': 'Darden Restaurants', 'GRMN': 'Garmin',
     'T': 'AT&T', 'VZ': 'Verizon', 'TMUS': 'T-Mobile', 'CMCSA': 'Comcast',
-    'COP': 'ConocoPhillips', 'SLB': 'SLB (Schlumberger)', 'PSX': 'Phillips 66',
-    'NEE': 'NextEra Energy', 'DUK': 'Duke Energy', 'AMT': 'American Tower', 'PLD': 'Prologis',
+    'CHTR': 'Charter Communications', 'EA': 'Electronic Arts', 'TTWO': 'Take-Two Interactive',
+    'MDLZ': 'Mondelez', 'PM': 'Philip Morris', 'MO': 'Altria',
+    'CL': 'Colgate-Palmolive', 'GIS': 'General Mills', 'KMB': 'Kimberly-Clark',
+    'STZ': 'Constellation Brands', 'SYY': 'Sysco', 'ADM': 'Archer-Daniels-Midland',
+    'CAT': 'Caterpillar', 'DE': 'Deere & Co', 'HON': 'Honeywell',
+    'ETN': 'Eaton', 'GE': 'GE Aerospace', 'RTX': 'RTX', 'LMT': 'Lockheed Martin',
+    'NOC': 'Northrop Grumman', 'EMR': 'Emerson Electric',
+    'UPS': 'UPS', 'FDX': 'FedEx', 'UNP': 'Union Pacific', 'NSC': 'Norfolk Southern',
+    'CSX': 'CSX', 'PH': 'Parker Hannifin', 'ITW': 'Illinois Tool Works',
+    'ADP': 'ADP', 'WM': 'Waste Management', 'RSG': 'Republic Services',
+    'MMM': '3M', 'BA': 'Boeing', 'FAST': 'Fastenal', 'CTAS': 'Cintas',
+    'OTIS': 'Otis Worldwide', 'CARR': 'Carrier Global',
+    'COP': 'ConocoPhillips', 'SLB': 'SLB', 'PSX': 'Phillips 66',
+    'EOG': 'EOG Resources', 'OXY': 'Occidental Petroleum', 'VLO': 'Valero Energy',
+    'MPC': 'Marathon Petroleum', 'KMI': 'Kinder Morgan', 'WMB': 'Williams Companies',
+    'DVN': 'Devon Energy', 'HAL': 'Halliburton',
+    'LIN': 'Linde', 'APD': 'Air Products', 'ECL': 'Ecolab', 'SHW': 'Sherwin-Williams',
+    'NUE': 'Nucor', 'FCX': 'Freeport-McMoRan', 'PPG': 'PPG Industries',
+    'NEM': 'Newmont', 'DD': 'DuPont', 'DOW': 'Dow',
+    'NEE': 'NextEra Energy', 'DUK': 'Duke Energy', 'SO': 'Southern Company',
+    'AEP': 'American Electric Power', 'EXC': 'Exelon', 'XEL': 'Xcel Energy', 'WEC': 'WEC Energy',
+    'AMT': 'American Tower', 'PLD': 'Prologis', 'CCI': 'Crown Castle',
+    'EQIX': 'Equinix', 'PSA': 'Public Storage', 'DLR': 'Digital Realty',
+    'WELL': 'Welltower', 'SPG': 'Simon Property', 'O': 'Realty Income',
+    'VICI': 'VICI Properties',
     'F': 'Ford', 'GM': 'General Motors',
-    'ABNB': 'Airbnb',
+}
+
+# ── セクター分類辞書（全発掘スキャン対象 + SCAN_STOCKS）─────────────────────────
+DISC_SECTORS = {
+    # JP SCAN_STOCKS
+    '7203':'自動車', '7267':'自動車', '7201':'自動車', '7974':'ゲーム',
+    '6758':'電機', '6752':'電機', '6501':'電機', '6503':'電機', '6645':'電機',
+    '6902':'自動車部品', '7751':'精密機器', '7741':'精密機器', '7309':'精密機器',
+    '6954':'機械', '6861':'電子部品', '8035':'半導体', '6920':'半導体',
+    '9984':'IT・通信', '9433':'IT・通信', '9432':'IT・通信', '6702':'IT・通信',
+    '6178':'IT・通信', '4704':'IT・通信', '2413':'IT・通信',
+    '8306':'金融', '8411':'金融', '8316':'金融', '8604':'金融', '8766':'保険',
+    '4661':'娯楽', '7832':'ゲーム', '9766':'ゲーム',
+    '4568':'医薬品', '4523':'医薬品', '4502':'医薬品', '4519':'医薬品', '4578':'医薬品',
+    '8801':'不動産', '8267':'小売', '3382':'小売', '9843':'小売', '7550':'小売',
+    '5401':'鉄鋼', '2802':'食品', '2914':'食品',
+    '9022':'交通', '9020':'交通',
+    '8002':'商社', '8031':'商社', '8058':'商社',
+    '6098':'サービス', '4755':'IT・通信', '6301':'機械', '6326':'機械',
+    '6367':'機械', '5020':'エネルギー', '1605':'エネルギー',
+    # JP DISCOVERY
+    '7011':'重工業', '7012':'重工業', '7013':'重工業', '6113':'機械',
+    '6302':'機械', '6305':'機械', '6361':'機械', '6383':'機械',
+    '6981':'電子部品', '6762':'電子部品', '6723':'半導体', '6857':'半導体',
+    '6971':'電子部品', '6963':'半導体', '6770':'電子部品', '4062':'半導体',
+    '6146':'半導体', '6273':'機械', '6479':'電子部品', '6481':'機械',
+    '6504':'電機', '6506':'電機', '6594':'電機', '7735':'半導体',
+    '6701':'電機', '6724':'精密機器', '6841':'電機', '6952':'電機', '6988':'電子部品',
+    '4063':'化学', '4188':'化学', '4183':'化学', '4042':'化学', '3402':'素材',
+    '4005':'化学', '4021':'化学', '4061':'化学', '4091':'化学', '4208':'化学',
+    '3407':'化学', '3436':'素材', '5201':'素材', '5333':'素材',
+    '5411':'鉄鋼', '5802':'素材', '4631':'化学', '3105':'素材', '3401':'素材', '3861':'素材',
+    '4901':'精密機器', '7733':'精密機器', '7731':'精密機器', '4543':'医療機器', '7762':'精密機器',
+    '2503':'食品', '2502':'食品', '2801':'食品', '2269':'食品',
+    '4452':'日用品', '2282':'食品', '1332':'食品', '2002':'食品',
+    '8830':'不動産', '3231':'不動産', '3289':'不動産', '8802':'不動産',
+    '8750':'保険', '8725':'保険', '8308':'金融', '8354':'金融', '7186':'金融',
+    '8309':'金融', '8601':'証券', '8630':'保険', '8697':'金融',
+    '9101':'海運', '9104':'海運', '9107':'海運',
+    '5108':'ゴム・タイヤ', '7270':'自動車', '7269':'自動車', '6471':'自動車部品',
+    '5110':'ゴム・タイヤ', '8015':'商社', '7211':'自動車', '7261':'自動車',
+    '7272':'自動車', '5101':'ゴム・タイヤ',
+    '4507':'医薬品', '4527':'医薬品', '4536':'医薬品', '4151':'医薬品',
+    '4307':'IT・通信', '9613':'IT・通信', '2432':'IT・通信', '4689':'IT・通信',
+    '4324':'IT・通信', '6460':'ゲーム', '7951':'楽器', '3659':'IT・通信', '1721':'IT・通信',
+    '9983':'小売', '2651':'小売', '3099':'小売', '8233':'小売',
+    '3048':'小売', '9831':'小売', '8252':'小売',
+    '8001':'商社', '8053':'商社', '2768':'商社',
+    '1801':'建設', '1802':'建設', '1803':'建設', '1812':'建設',
+    '1928':'建設', '1925':'建設',
+    '9005':'交通', '9021':'交通', '9064':'物流', '9201':'交通', '9202':'交通',
+    '5019':'エネルギー', '5631':'機械', '5803':'素材',
+    '9503':'エネルギー', '9531':'エネルギー', '9501':'エネルギー',
+    '9532':'エネルギー', '9735':'サービス',
+    # US SCAN_STOCKS
+    'AAPL':'テクノロジー', 'MSFT':'テクノロジー', 'NVDA':'テクノロジー',
+    'GOOGL':'テクノロジー', 'AMZN':'一般消費財', 'META':'テクノロジー',
+    'TSLA':'自動車', 'JPM':'金融', 'V':'金融', 'JNJ':'ヘルスケア',
+    'WMT':'生活必需品', 'PG':'生活必需品', 'MA':'金融', 'UNH':'ヘルスケア',
+    'HD':'一般消費財', 'CVX':'エネルギー', 'LLY':'ヘルスケア', 'ABBV':'ヘルスケア',
+    'MRK':'ヘルスケア', 'KO':'生活必需品', 'PEP':'生活必需品', 'XOM':'エネルギー',
+    'BAC':'金融', 'AVGO':'テクノロジー', 'COST':'生活必需品', 'ORCL':'テクノロジー',
+    'CSCO':'テクノロジー', 'AMD':'テクノロジー', 'CRM':'テクノロジー',
+    'DIS':'通信・メディア', 'NFLX':'通信・メディア',
+    # US DISCOVERY
+    'INTC':'テクノロジー', 'QCOM':'テクノロジー', 'TXN':'テクノロジー',
+    'MU':'テクノロジー', 'LRCX':'テクノロジー', 'AMAT':'テクノロジー',
+    'KLAC':'テクノロジー', 'ADI':'テクノロジー', 'MRVL':'テクノロジー',
+    'NXPI':'テクノロジー', 'ADBE':'テクノロジー', 'NOW':'テクノロジー',
+    'INTU':'テクノロジー', 'ADSK':'テクノロジー', 'CDNS':'テクノロジー',
+    'SNPS':'テクノロジー', 'ANSS':'テクノロジー', 'FTNT':'テクノロジー',
+    'CTSH':'テクノロジー', 'HPQ':'テクノロジー', 'HPE':'テクノロジー',
+    'NTAP':'テクノロジー', 'MSI':'テクノロジー', 'GLW':'テクノロジー',
+    'APH':'テクノロジー', 'PYPL':'金融', 'UBER':'一般消費財',
+    'PLTR':'テクノロジー', 'SNOW':'テクノロジー', 'DDOG':'テクノロジー', 'ABNB':'一般消費財',
+    'GS':'金融', 'MS':'金融', 'C':'金融', 'WFC':'金融', 'BLK':'金融',
+    'AXP':'金融', 'SCHW':'金融', 'USB':'金融',
+    'CME':'金融', 'ICE':'金融', 'SPGI':'金融', 'MCO':'金融', 'AON':'金融',
+    'MMC':'金融', 'FI':'金融', 'FIS':'金融', 'GPN':'金融',
+    'STT':'金融', 'BK':'金融', 'BX':'金融', 'KKR':'金融', 'AMP':'金融',
+    'TMO':'ヘルスケア', 'DHR':'ヘルスケア', 'ISRG':'ヘルスケア', 'MDT':'ヘルスケア',
+    'BSX':'ヘルスケア', 'SYK':'ヘルスケア', 'ABT':'ヘルスケア',
+    'AMGN':'ヘルスケア', 'GILD':'ヘルスケア', 'BMY':'ヘルスケア',
+    'PFE':'ヘルスケア', 'REGN':'ヘルスケア', 'VRTX':'ヘルスケア',
+    'ELV':'ヘルスケア', 'HCA':'ヘルスケア', 'CVS':'ヘルスケア', 'CI':'ヘルスケア',
+    'HUM':'ヘルスケア', 'ZTS':'ヘルスケア', 'BDX':'ヘルスケア', 'IDXX':'ヘルスケア',
+    'EW':'ヘルスケア', 'RMD':'ヘルスケア',
+    'NKE':'一般消費財', 'SBUX':'一般消費財', 'MCD':'一般消費財', 'CMG':'一般消費財',
+    'TGT':'一般消費財', 'LOW':'一般消費財', 'TJX':'一般消費財',
+    'BKNG':'一般消費財', 'MAR':'一般消費財', 'HLT':'一般消費財', 'ROST':'一般消費財',
+    'ORLY':'一般消費財', 'AZO':'一般消費財', 'DHI':'一般消費財', 'LEN':'一般消費財',
+    'YUM':'一般消費財', 'DRI':'一般消費財', 'GRMN':'テクノロジー',
+    'T':'通信', 'VZ':'通信', 'TMUS':'通信', 'CMCSA':'通信',
+    'CHTR':'通信', 'EA':'通信・メディア', 'TTWO':'通信・メディア',
+    'MDLZ':'生活必需品', 'PM':'生活必需品', 'MO':'生活必需品', 'CL':'生活必需品',
+    'GIS':'生活必需品', 'KMB':'生活必需品', 'STZ':'生活必需品', 'SYY':'生活必需品',
+    'ADM':'生活必需品',
+    'CAT':'産業', 'DE':'産業', 'HON':'産業', 'ETN':'産業', 'GE':'産業',
+    'RTX':'産業', 'LMT':'産業', 'NOC':'産業', 'EMR':'産業',
+    'UPS':'産業', 'FDX':'産業', 'UNP':'産業', 'NSC':'産業', 'CSX':'産業',
+    'PH':'産業', 'ITW':'産業', 'ADP':'産業', 'WM':'産業', 'RSG':'産業',
+    'MMM':'産業', 'BA':'産業', 'FAST':'産業', 'CTAS':'産業',
+    'OTIS':'産業', 'CARR':'産業',
+    'COP':'エネルギー', 'SLB':'エネルギー', 'PSX':'エネルギー', 'EOG':'エネルギー',
+    'OXY':'エネルギー', 'VLO':'エネルギー', 'MPC':'エネルギー', 'KMI':'エネルギー',
+    'WMB':'エネルギー', 'DVN':'エネルギー', 'HAL':'エネルギー',
+    'LIN':'素材', 'APD':'素材', 'ECL':'素材', 'SHW':'素材', 'NUE':'素材',
+    'FCX':'素材', 'PPG':'素材', 'NEM':'素材', 'DD':'素材', 'DOW':'素材',
+    'NEE':'公共', 'DUK':'公共', 'SO':'公共', 'AEP':'公共', 'EXC':'公共',
+    'XEL':'公共', 'WEC':'公共',
+    'AMT':'不動産', 'PLD':'不動産', 'CCI':'不動産', 'EQIX':'不動産',
+    'PSA':'不動産', 'DLR':'不動産', 'WELL':'不動産', 'SPG':'不動産',
+    'O':'不動産', 'VICI':'不動産',
+    'F':'自動車', 'GM':'自動車',
 }
 
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
@@ -793,12 +960,30 @@ def _is_recent_gc(last_gc, months=6):
 
 
 def _run_discovery_thread(market: str):
-    """発掘スキャン: JP or US の発掘対象銘柄をスキャンし3種に分類して返す"""
-    stock_list = JP_DISCOVERY_STOCKS if market == 'jp' else US_DISCOVERY_STOCKS
-    existing   = set(display_ticker(normalize_ticker(t)) for t in SCAN_STOCKS)
-    targets    = [t for t in stock_list
-                  if display_ticker(normalize_ticker(t)) not in existing]
-    total      = len(targets)
+    """発掘スキャン: JP or US の全対象銘柄（SCAN_STOCKS含む）をスキャンし3種に分類して返す"""
+    if market == 'jp':
+        # SCAN_STOCKS の日本株（数字ティッカー）＋ JP_DISCOVERY_STOCKS（重複排除）
+        base_tickers = [t for t in SCAN_STOCKS if t.isdigit()]
+        seen = set(base_tickers)
+        for t in JP_DISCOVERY_STOCKS:
+            dt = display_ticker(normalize_ticker(t))
+            if dt not in seen:
+                base_tickers.append(t)
+                seen.add(dt)
+        targets    = base_tickers
+        disc_names = JP_DISCOVERY_NAMES
+    else:
+        # SCAN_STOCKS の米国株（英字ティッカー）＋ US_DISCOVERY_STOCKS（重複排除）
+        base_tickers = [t for t in SCAN_STOCKS if not t.isdigit()]
+        seen = set(base_tickers)
+        for t in US_DISCOVERY_STOCKS:
+            if t not in seen:
+                base_tickers.append(t)
+                seen.add(t)
+        targets    = base_tickers
+        disc_names = US_DISCOVERY_NAMES
+
+    total = len(targets)
 
     with _disc_lock:
         _disc_state[market].update({
@@ -810,12 +995,18 @@ def _run_discovery_thread(market: str):
     _counter    = [0]
 
     def safe(t):
-        name = STOCK_NAMES.get(t, t)
+        name = STOCK_NAMES.get(t) or disc_names.get(t, t)
         with _disc_lock:
             _disc_state[market]['current']      = t
             _disc_state[market]['current_name'] = name
         try:
             r = scan_stock_data(t)
+            if r:
+                # 発掘銘柄で STOCK_NAMES 未登録の場合は disc_names を使う
+                if r.get('name') == r.get('ticker'):
+                    r['name'] = disc_names.get(r['ticker'], r['ticker'])
+                # セクター付与
+                r['sector'] = DISC_SECTORS.get(r['ticker'], '')
         except Exception:
             r = None
         with _disc_lock:
@@ -839,10 +1030,15 @@ def _run_discovery_thread(market: str):
         elif _is_recent_gc(r.get('last_gc'), months=6):
             recent_gc.append(r)
 
+    # 買い/上昇トレンドはセクター順→ティッカー順にソート
+    def sector_key(r):
+        return (r.get('sector', ''), r.get('ticker', ''))
+    buy.sort(key=sector_key)
+    uptrend.sort(key=sector_key)
+
     # 直近GCは新しい順にソート
     def gc_key(r):
-        gc = r.get('last_gc') or ''
-        return gc
+        return r.get('last_gc') or ''
     recent_gc.sort(key=gc_key, reverse=True)
 
     results = {'buy': buy, 'uptrend': uptrend, 'recent_gc': recent_gc}

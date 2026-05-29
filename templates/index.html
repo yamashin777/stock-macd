@@ -718,7 +718,7 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <button class="pbtn on" id="disc-btn-jp" onclick="setDiscMarket('jp')">🇯🇵 日本株</button>
       <button class="pbtn"    id="disc-btn-us" onclick="setDiscMarket('us')">🇺🇸 米国株</button>
-      <span id="disc-market-hint" style="font-size:11px;color:var(--muted)">日経225相当 ~120銘柄</span>
+      <span id="disc-market-hint" style="font-size:11px;color:var(--muted)">日経225＋主要銘柄 約190銘柄</span>
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span id="disc-updated" style="font-size:11px;color:var(--muted)"></span>
@@ -1979,8 +1979,8 @@ async function scanAddToWL(e, ticker) {
 
 // ── 発掘スキャンタブ ─────────────────────────────────────────────────────────
 const DISC_INFO = {
-  jp: { hint: '日経225相当 ~120銘柄', flag: '🇯🇵' },
-  us: { hint: 'S&P500相当 ~65銘柄',  flag: '🇺🇸' },
+  jp: { hint: '日経225＋主要銘柄 約190銘柄', flag: '🇯🇵' },
+  us: { hint: 'S&P500主要銘柄 約220銘柄',   flag: '🇺🇸' },
 };
 let discMarket   = 'jp';
 let discData     = { jp: null, us: null };
@@ -2117,18 +2117,35 @@ function _renderDiscResults(data) {
     </div>`;
   }
 
-  function section(title, color, items) {
+  // セクター別サブヘッダーを挿入しながら行を生成
+  function sectionWithSectors(items) {
     if (!items.length) return '';
+    let html = '';
+    let prevSector = null;
+    for (const d of items) {
+      const sec = d.sector || '';
+      if (sec && sec !== prevSector) {
+        html += `<div style="font-size:10px;font-weight:600;color:var(--muted);padding:6px 4px 2px;border-bottom:1px solid var(--border);margin-top:${prevSector !== null ? 8 : 0}px;letter-spacing:.04em">${escapeHtml(sec)}</div>`;
+        prevSector = sec;
+      }
+      html += discRow(d);
+    }
+    return html;
+  }
+
+  function section(title, color, items, useSectors) {
+    if (!items.length) return '';
+    const body = useSectors ? sectionWithSectors(items) : items.map(discRow).join('');
     return `<div class="disc-section">
       <div class="disc-section-title" style="color:${color}">${title}&ensp;<span style="font-weight:400;font-size:11px">${items.length}銘柄</span></div>
-      ${items.map(discRow).join('')}
+      ${body}
     </div>`;
   }
 
   const found = buy.length + uptrend.length + recentGc.length;
-  let html = section('📈 買いシグナル',       'var(--green)',  buy)
-           + section('🔼 上昇トレンド',       'var(--blue)',   uptrend)
-           + section('⏰ 直近GCあり（6ヶ月以内）', 'var(--orange)', recentGc);
+  let html = section('📈 買いシグナル',           'var(--green)',  buy,      true)
+           + section('🔼 上昇トレンド',           'var(--blue)',   uptrend,  true)
+           + section('⏰ 直近GCあり（6ヶ月以内）', 'var(--orange)', recentGc, false);
 
   if (!found) {
     html = `<div class="sig-empty">シグナル銘柄は見つかりませんでした（スキャン対象: ${total}銘柄）</div>`;
