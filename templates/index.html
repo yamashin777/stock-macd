@@ -1115,6 +1115,7 @@ function closeDetail() {
   active        = null;
   detailData    = null;
   currentPeriod = 36;
+  if (_aiRetryTimer) { clearInterval(_aiRetryTimer); _aiRetryTimer = null; }
   document.querySelectorAll('.card').forEach(el => el.classList.remove('active'));
   document.getElementById('detail').style.display = 'none';
   destroyCharts();
@@ -1207,10 +1208,15 @@ function renderDetail(data) {
 }
 
 // ── AI解説 ─────────────────────────────────────────────────────────────────
+let _aiRetryTimer = null;
+
 async function fetchAiComment() {
   const box = document.getElementById('ai-comment-box');
   const btn = document.getElementById('btn-ai-fetch');
   if (!box || !detailData) return;
+
+  // 進行中のカウントダウンをキャンセル
+  if (_aiRetryTimer) { clearInterval(_aiRetryTimer); _aiRetryTimer = null; }
 
   // ローディング表示
   box.className = 'ai-comment-box loading';
@@ -1218,7 +1224,7 @@ async function fetchAiComment() {
   if (btn) { btn.style.display = 'none'; btn.disabled = true; }
 
   try {
-    const res  = await fetch('/api/ai-comment', {
+    const res = await fetch('/api/ai-comment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1235,6 +1241,14 @@ async function fetchAiComment() {
         last_dc:         detailData.last_dc,
       }),
     });
+
+    if (res.status === 429) {
+      // レート制限 → カウントダウン表示して自動再試行
+      _startAiCountdown(60);
+      if (btn) { btn.style.display = ''; btn.disabled = false; }
+      return;
+    }
+
     const data = await res.json();
     if (data.comment) {
       box.className = 'ai-comment-box';
@@ -1245,10 +1259,32 @@ async function fetchAiComment() {
     }
   } catch(err) {
     box.className = 'ai-comment-box error';
-    box.textContent = '通信エラーが発生しました。しばらくしてから再試行してください。';
+    box.textContent = '通信エラーが発生しました。↻ 再取得をお試しください。';
   }
-  // 完了後に「↻ 再取得」ボタンを表示
   if (btn) { btn.style.display = ''; btn.disabled = false; }
+}
+
+function _startAiCountdown(sec) {
+  const box = document.getElementById('ai-comment-box');
+  if (!box) return;
+  let remaining = sec;
+  const tick = () => {
+    if (!document.getElementById('ai-comment-box')) {
+      // パネルが閉じられたら停止
+      if (_aiRetryTimer) { clearInterval(_aiRetryTimer); _aiRetryTimer = null; }
+      return;
+    }
+    box.className = 'ai-comment-box loading';
+    box.textContent = `⏳ API利用制限中 — ${remaining}秒後に自動再試行します…`;
+    if (remaining <= 0) {
+      clearInterval(_aiRetryTimer);
+      _aiRetryTimer = null;
+      fetchAiComment();
+    }
+    remaining--;
+  };
+  tick();
+  _aiRetryTimer = setInterval(tick, 1000);
 }
 
 // ── Zoom helpers ───────────────────────────────────────────────────────────

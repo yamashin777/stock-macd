@@ -931,12 +931,10 @@ MACD値: {macd_val:+.4f}
             return jsonify({'comment': text})
         elif resp.status_code == 404:
             last_err = f'モデル {model} は利用不可'
-            continue   # 次のモデルを試す
+            time.sleep(0.5)   # 連続リクエストを避けるため少し待つ
+            continue           # 次のモデルを試す
         elif resp.status_code == 429:
-            return jsonify({'error': (
-                'APIの利用制限に達しました（1分15回・1日1,500回まで）。\n'
-                'しばらく待ってから再度お試しください。'
-            )}), 429
+            return jsonify({'error': 'rate_limit'}), 429
         else:
             return jsonify({'error': f'Gemini API エラー ({resp.status_code}): {resp.text[:200]}'}), 502
 
