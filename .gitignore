@@ -38,3 +38,7 @@ desktop.ini
 .idea/
 *.swp
 *.swo
+
+# Generated data (local only - use Supabase in production)
+disc_cache.json
+ai_comments.json

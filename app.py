@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, make_response
 import yfinance as yf
 import pandas as pd
 import os
@@ -6,6 +6,7 @@ import json
 import time
 import gc
 import ctypes
+import re as _re
 
 # Linux環境でPythonがOSにメモリを返却するためのヘルパー
 try:
@@ -543,9 +544,54 @@ DISC_SECTORS = {
     'RACE':'自動車', 'STLA':'自動車',
 }
 
+# yfinance の英語セクター名 → 日本語マッピング（DISC_SECTORS にない銘柄用）
+_YF_SECTOR_JA: dict = {
+    'Technology': 'テクノロジー',
+    'Financial Services': '金融',
+    'Healthcare': 'ヘルスケア',
+    'Consumer Cyclical': '一般消費財',
+    'Consumer Defensive': '生活必需品',
+    'Energy': 'エネルギー',
+    'Communication Services': '通信',
+    'Industrials': '産業',
+    'Basic Materials': '素材',
+    'Real Estate': '不動産',
+    'Utilities': '公益事業',
+}
+
 SUPABASE_URL       = os.environ.get('SUPABASE_URL', '')
 SUPABASE_KEY       = os.environ.get('SUPABASE_KEY', '')
 GEMINI_API_KEY     = os.environ.get('GEMINI_API_KEY', '')
+
+# ── マルチプロファイル ヘルパー ──────────────────────────────────────────────
+def _safe_profile(profile: str) -> str:
+    """プロファイル名を英数字・_・- に正規化（最大 20 文字）"""
+    if not profile:
+        return ''
+    return _re.sub(r'[^a-zA-Z0-9_-]', '', str(profile))[:20]
+
+def _pkey(key: str, profile: str) -> str:
+    """プロファイル付き Supabase キー  例: watchlist_dad"""
+    p = _safe_profile(profile)
+    return f'{key}_{p}' if p else key
+
+def _pfile(filepath: str, profile: str) -> str:
+    """プロファイル付きローカルファイルパス  例: watchlist_dad.json"""
+    p = _safe_profile(profile)
+    if not p:
+        return filepath
+    base, ext = os.path.splitext(filepath)
+    return f'{base}_{p}{ext}'
+
+def _req_profile() -> str:
+    """リクエストからプロファイルを取得（GETパラ or POSTボディ）"""
+    p = request.args.get('profile', '')
+    if not p:
+        p = (request.get_json(silent=True) or {}).get('profile', '')
+    return _safe_profile(p)
+
+# ── 発掘スキャン キャッシュ定数 ─────────────────────────────────────────────
+DISC_CACHE_FILE = 'disc_cache.json'
 
 # ── AI解説キャッシュ（永続化 + メモリキャッシュ）────────────────────────────
 AI_COMMENTS_FILE = 'ai_comments.json'
@@ -625,56 +671,64 @@ def _sb_save(key, value):
     return False
 
 
-def load_watchlist():
+def load_watchlist(profile: str = '') -> list:
+    key  = _pkey('watchlist', profile)
+    fpath = _pfile(WATCHLIST_FILE, profile)
     if SUPABASE_URL and SUPABASE_KEY:
-        data = _sb_load('watchlist')
+        data = _sb_load(key)
         if data is not None:
             return data
-    # ローカル fallback
-    if os.path.exists(WATCHLIST_FILE):
+    if os.path.exists(fpath):
         try:
-            with open(WATCHLIST_FILE, 'r', encoding='utf-8') as f:
+            with open(fpath, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
             pass
-    return DEFAULT_WATCHLIST.copy()
+    return [] if profile else DEFAULT_WATCHLIST.copy()
 
 
-def save_watchlist(wl):
+def save_watchlist(wl: list, profile: str = '') -> None:
+    key   = _pkey('watchlist', profile)
+    fpath = _pfile(WATCHLIST_FILE, profile)
     if SUPABASE_URL and SUPABASE_KEY:
-        if _sb_save('watchlist', wl):
+        if _sb_save(key, wl):
             return
-    with open(WATCHLIST_FILE, 'w', encoding='utf-8') as f:
+    with open(fpath, 'w', encoding='utf-8') as f:
         json.dump(wl, f, ensure_ascii=False)
 
 
-def load_metadata():
+def load_metadata(profile: str = '') -> dict:
+    key   = _pkey('metadata', profile)
+    fpath = _pfile(METADATA_FILE, profile)
     if SUPABASE_URL and SUPABASE_KEY:
-        data = _sb_load('metadata')
+        data = _sb_load(key)
         if data is not None:
             return data
-    # ローカル fallback
-    if os.path.exists(METADATA_FILE):
+    if os.path.exists(fpath):
         try:
-            with open(METADATA_FILE, 'r', encoding='utf-8') as f:
+            with open(fpath, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
             pass
     return {}
 
 
-def save_metadata(meta):
+def save_metadata(meta: dict, profile: str = '') -> None:
+    key   = _pkey('metadata', profile)
+    fpath = _pfile(METADATA_FILE, profile)
     if SUPABASE_URL and SUPABASE_KEY:
-        if _sb_save('metadata', meta):
+        if _sb_save(key, meta):
             return
-    with open(METADATA_FILE, 'w', encoding='utf-8') as f:
+    with open(fpath, 'w', encoding='utf-8') as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
 
-def enrich_with_metadata(result: dict) -> dict:
-    entry = load_metadata().get(result['ticker'], {})
+def enrich_with_metadata(result: dict, profile: str = '') -> dict:
+    entry = load_metadata(profile).get(result['ticker'], {})
     result['custom_name'] = entry.get('custom_name', '')
     result['memo']        = entry.get('memo', '')
+    # DISC_SECTORS優先、なければfetch_stock_dataが取得したsectorを維持
+    result['sector']      = DISC_SECTORS.get(result['ticker'], '') or result.get('sector', '')
     return result
 
 
@@ -825,6 +879,7 @@ def fetch_stock_data(ticker: str) -> dict:
     currency = 'USD'
     current_price = float(hist['Close'].iloc[-1])
     prev_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else current_price
+    sector_yf = ''
 
     try:
         info = stock.info or {}
@@ -834,6 +889,7 @@ def fetch_stock_data(ticker: str) -> dict:
             info.get('currentPrice') or info.get('regularMarketPrice') or current_price
         )
         prev_close = float(info.get('previousClose') or prev_close)
+        sector_yf = info.get('sector', '') or ''
     except Exception:
         try:
             fi = stock.fast_info
@@ -874,8 +930,12 @@ def fetch_stock_data(ticker: str) -> dict:
         elif pm >= ps and cm < cs:
             last_dc = common[i].strftime('%Y-%m')
 
+    # セクター: DISC_SECTORS優先（日本語）、なければ yfinance から翻訳して取得
+    disp_t = display_ticker(symbol)
+    sector = DISC_SECTORS.get(disp_t, '') or _YF_SECTOR_JA.get(sector_yf, sector_yf)
+
     return {
-        'ticker': display_ticker(symbol),
+        'ticker': disp_t,
         'symbol': symbol,
         'name': name,
         'currency': currency,
@@ -889,6 +949,7 @@ def fetch_stock_data(ticker: str) -> dict:
         'histogram_value': _last(hist_vals),
         'last_gc': last_gc,
         'last_dc': last_dc,
+        'sector': sector,
         'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
         'chart': {
             'dates':     all_dates,
@@ -904,18 +965,23 @@ def fetch_stock_data(ticker: str) -> dict:
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    resp = make_response(render_template('index.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
 
 
 @app.route('/api/watchlist', methods=['GET'])
 def get_watchlist():
-    return jsonify({'watchlist': load_watchlist()})
+    profile = _req_profile()
+    return jsonify({'watchlist': load_watchlist(profile)})
 
 
 @app.route('/api/watchlist/all')
 def get_all_stocks():
     """Fetch all watchlist stocks in parallel and return together."""
-    wl = load_watchlist()
+    profile = _req_profile()
+    wl = load_watchlist(profile)
     if not wl:
         return jsonify({'watchlist': [], 'data': {}, 'errors': {}})
 
@@ -931,20 +997,21 @@ def get_all_stocks():
             if err:
                 errors[ticker] = err
             else:
-                data[ticker] = enrich_with_metadata(result)
+                data[ticker] = enrich_with_metadata(result, profile)
 
     return jsonify({'watchlist': wl, 'data': data, 'errors': errors})
 
 
 @app.route('/api/watchlist', methods=['POST'])
 def add_to_watchlist():
-    body = request.get_json(silent=True) or {}
+    body    = request.get_json(silent=True) or {}
+    profile = _safe_profile(body.get('profile', ''))
     raw = body.get('ticker', '').strip().upper()
     if not raw:
         return jsonify({'error': 'ティッカーを入力してください'}), 400
 
     disp = display_ticker(normalize_ticker(raw))
-    wl = load_watchlist()
+    wl = load_watchlist(profile)
     if disp in wl:
         return jsonify({'error': 'すでにリストにあります'}), 400
 
@@ -956,51 +1023,55 @@ def add_to_watchlist():
         return jsonify({'error': str(e)}), 400
 
     wl.append(disp)
-    save_watchlist(wl)
-    meta = load_metadata()
+    save_watchlist(wl, profile)
+    meta = load_metadata(profile)
     auto_memo = str(body.get('memo', '')).strip()
     if disp not in meta:
         meta[disp] = {'custom_name': '', 'memo': auto_memo}
-        save_metadata(meta)
+        save_metadata(meta, profile)
     elif auto_memo and not meta[disp].get('memo'):
         meta[disp]['memo'] = auto_memo
-        save_metadata(meta)
+        save_metadata(meta, profile)
     return jsonify({'success': True, 'watchlist': wl})
 
 
 @app.route('/api/watchlist/order', methods=['PUT'])
 def reorder_watchlist():
-    body = request.get_json(silent=True) or {}
+    body    = request.get_json(silent=True) or {}
+    profile = _safe_profile(body.get('profile', ''))
     new_order = body.get('order', [])
-    wl = load_watchlist()
+    wl = load_watchlist(profile)
     if not isinstance(new_order, list) or set(new_order) != set(wl):
         return jsonify({'error': '銘柄リストが一致しません'}), 400
-    save_watchlist(new_order)
+    save_watchlist(new_order, profile)
     return jsonify({'success': True, 'watchlist': new_order})
 
 
 @app.route('/api/watchlist/<ticker>', methods=['DELETE'])
 def remove_from_watchlist(ticker):
+    profile = _req_profile()
     t = ticker.upper()
-    wl = load_watchlist()
+    wl = load_watchlist(profile)
     if t not in wl:
         return jsonify({'error': '見つかりません'}), 404
     wl.remove(t)
-    save_watchlist(wl)
+    save_watchlist(wl, profile)
     return jsonify({'success': True, 'watchlist': wl})
 
 
 @app.route('/api/metadata', methods=['GET'])
 def get_metadata():
-    return jsonify(load_metadata())
+    profile = _req_profile()
+    return jsonify(load_metadata(profile))
 
 
 @app.route('/api/metadata/<ticker>', methods=['PUT'])
 def update_metadata(ticker):
-    body  = request.get_json(silent=True) or {}
-    disp  = display_ticker(normalize_ticker(ticker))
-    meta  = load_metadata()
-    entry = meta.get(disp, {})
+    body    = request.get_json(silent=True) or {}
+    profile = _safe_profile(body.get('profile', ''))
+    disp    = display_ticker(normalize_ticker(ticker))
+    meta    = load_metadata(profile)
+    entry   = meta.get(disp, {})
     if 'custom_name' in body:
         entry['custom_name'] = str(body['custom_name']).strip()
     if 'memo' in body:
@@ -1008,7 +1079,7 @@ def update_metadata(ticker):
     elif 'memo_if_empty' in body and not entry.get('memo'):
         entry['memo'] = str(body['memo_if_empty'])
     meta[disp] = entry
-    save_metadata(meta)
+    save_metadata(meta, profile)
     return jsonify({'success': True, 'ticker': disp, **entry})
 
 
@@ -1098,7 +1169,7 @@ MACD値: {macd_val:+.4f}
             time.sleep(0.5)   # 連続リクエストを避けるため少し待つ
             continue           # 次のモデルを試す
         elif resp.status_code == 429:
-            return jsonify({'error': 'rate_limit'}), 429
+            return jsonify({'error': 'rate_limit', 'message': 'APIの利用制限に達しました。しばらく時間をおいてから再試行してください。'}), 429
         else:
             return jsonify({'error': f'Gemini API エラー ({resp.status_code}): {resp.text[:200]}'}), 502
 
@@ -1111,12 +1182,25 @@ for _names in (JP_DISCOVERY_NAMES, US_DISCOVERY_NAMES):
         if _k not in STOCK_NAMES:
             STOCK_NAMES[_k] = _v
 
-# ── スキャン バックグラウンドスレッド管理 ─────────────────────────────────────
-_scan_lock  = threading.Lock()
-_scan_state = {'status': 'idle', 'results': None, 'updated_at': 0, 'phase': '',
-               'total': 0, 'done': 0, 'current': '', 'current_name': '',
-               'earn_total': 0, 'earn_done': 0, 'earn_current': '', 'earn_current_name': '',
-               'start_time': 0}
+# ── スキャン バックグラウンドスレッド管理（プロファイル別）──────────────────
+_scan_states:      dict = {}   # profile -> state dict
+_scan_locks:       dict = {}   # profile -> Lock
+_profile_init_lock      = threading.Lock()
+
+def _empty_scan_state() -> dict:
+    return {'status': 'idle', 'results': None, 'updated_at': 0, 'phase': '',
+            'total': 0, 'done': 0, 'current': '', 'current_name': '',
+            'earn_total': 0, 'earn_done': 0, 'earn_current': '', 'earn_current_name': '',
+            'start_time': 0}
+
+def _get_scan_ctx(profile: str = ''):
+    """プロファイル別スキャン状態とロックを返す（初回は自動初期化）"""
+    p = _safe_profile(profile)
+    with _profile_init_lock:
+        if p not in _scan_states:
+            _scan_states[p] = _empty_scan_state()
+            _scan_locks[p]  = threading.Lock()
+    return _scan_states[p], _scan_locks[p]
 
 # ── 発掘スキャン スレッド管理（JP/US共用）────────────────────────────────────
 def _empty_disc_state():
@@ -1125,6 +1209,72 @@ def _empty_disc_state():
 
 _disc_lock  = threading.Lock()
 _disc_state = {'jp': _empty_disc_state(), 'us': _empty_disc_state()}
+
+
+def _load_disc_cache():
+    """発掘スキャン結果をファイル/Supabaseから読み込んで _disc_state に反映"""
+    loaded: dict = {}
+    # Supabase 優先
+    if SUPABASE_URL and SUPABASE_KEY:
+        for market in ('jp', 'us'):
+            data = _sb_load(f'disc_cache_{market}')
+            if isinstance(data, dict) and data.get('status') == 'done':
+                loaded[market] = data
+    # ローカルファイルで補完
+    if os.path.exists(DISC_CACHE_FILE):
+        try:
+            with open(DISC_CACHE_FILE, 'r', encoding='utf-8') as f:
+                file_data = json.load(f)
+            for market in ('jp', 'us'):
+                if market not in loaded and isinstance(file_data.get(market), dict):
+                    if file_data[market].get('status') == 'done':
+                        loaded[market] = file_data[market]
+        except Exception as e:
+            print(f'[disc_cache] 読み込みエラー: {e}')
+    for market, data in loaded.items():
+        with _disc_lock:
+            _disc_state[market].update({
+                'status':     'done',
+                'results':    data.get('results', {}),
+                'updated_at': data.get('updated_at', 0),
+                'total':      data.get('total', 0),
+                'done':       data.get('total', 0),
+            })
+        ts = data.get('updated_at', 0)
+        ts_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M') if ts else '不明'
+        print(f'[startup] 発掘キャッシュ({market})読み込み: {ts_str}')
+
+
+def _save_disc_cache(market: str):
+    """発掘スキャン結果をファイル/Supabaseに保存"""
+    try:
+        with _disc_lock:
+            state = dict(_disc_state[market])
+        cache_data = {
+            'status':     'done',
+            'results':    state.get('results', {}),
+            'updated_at': state.get('updated_at', 0),
+            'total':      state.get('total', 0),
+        }
+        # ローカルファイル
+        existing: dict = {}
+        if os.path.exists(DISC_CACHE_FILE):
+            try:
+                with open(DISC_CACHE_FILE, 'r', encoding='utf-8') as f:
+                    existing = json.load(f)
+            except Exception:
+                pass
+        existing[market] = cache_data
+        with open(DISC_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(existing, f, ensure_ascii=False)
+        # Supabase
+        if SUPABASE_URL and SUPABASE_KEY:
+            _sb_save(f'disc_cache_{market}', cache_data)
+        buy_cnt = len(cache_data['results'].get('buy', []))
+        print(f'[disc_cache] 保存完了({market}): 買い{buy_cnt}件')
+    except Exception as e:
+        print(f'[disc_cache] 保存エラー: {e}')
+
 
 def load_auto_scan_list():
     """Supabaseから自動取得済み値上がり銘柄リストを返す (stocks, updated_at)"""
@@ -1206,12 +1356,12 @@ def fetch_top_gainers(limit=100):
     return results[:limit]
 
 
-def load_scan_list():
+def load_scan_list(profile: str = ''):
     """デフォルト + 自動取得 + 手動追加 を重複排除してマージ"""
     custom = []
     auto_stocks = []
     if SUPABASE_URL and SUPABASE_KEY:
-        d = _sb_load('scan_list')
+        d = _sb_load(_pkey('scan_list', profile))
         if isinstance(d, list):
             custom = d
         auto_data, _ = load_auto_scan_list()
@@ -1236,16 +1386,17 @@ def load_scan_list():
     return SCAN_STOCKS + extra_auto + extra_custom, custom
 
 
-def save_scan_list(custom):
+def save_scan_list(custom: list, profile: str = '') -> None:
     if SUPABASE_URL and SUPABASE_KEY:
-        _sb_save('scan_list', custom)
+        _sb_save(_pkey('scan_list', profile), custom)
 
 
-def _invalidate_scan_cache():
+def _invalidate_scan_cache(profile: str = ''):
     if SUPABASE_URL and SUPABASE_KEY:
-        _sb_save('scan_cache', {'results': [], 'updated_at': 0})
-    with _scan_lock:
-        _scan_state['status'] = 'idle'
+        _sb_save(_pkey('scan_cache', profile), {'results': [], 'updated_at': 0})
+    state, lock = _get_scan_ctx(profile)
+    with lock:
+        state['status'] = 'idle'
 
 
 def _is_recent_gc(last_gc, months=6):
@@ -1361,6 +1512,8 @@ def _run_discovery_thread(market: str):
             'status': 'done', 'results': results,
             'updated_at': updated_at, 'done': total,
         })
+    # スキャン結果をキャッシュに保存（再起動後も即表示できるよう）
+    _save_disc_cache(market)
 
 
 @app.route('/api/discovery', methods=['GET', 'POST'])
@@ -1408,34 +1561,35 @@ def discovery():
     return jsonify({'status': 'idle'})
 
 
-def _run_scan_thread():
+def _run_scan_thread(profile: str = ''):
+    state, lock = _get_scan_ctx(profile)
     start_time = time.time()
-    with _scan_lock:
-        _scan_state.update({'phase': 'prices', 'start_time': start_time,
-                            'done': 0, 'total': 0, 'current': '', 'current_name': '',
-                            'earn_done': 0, 'earn_total': 0,
-                            'earn_current': '', 'earn_current_name': ''})
+    with lock:
+        state.update({'phase': 'prices', 'start_time': start_time,
+                      'done': 0, 'total': 0, 'current': '', 'current_name': '',
+                      'earn_done': 0, 'earn_total': 0,
+                      'earn_current': '', 'earn_current_name': ''})
 
-    all_stocks, _ = load_scan_list()
+    all_stocks, _ = load_scan_list(profile)
     total = len(all_stocks)
-    with _scan_lock:
-        _scan_state['total'] = total
+    with lock:
+        state['total'] = total
 
     results = []
-    _counter = [0]   # mutable counter shared across worker threads
+    _counter = [0]
 
     def safe(t):
         name = STOCK_NAMES.get(t, t)
-        with _scan_lock:
-            _scan_state['current']      = t
-            _scan_state['current_name'] = name
+        with lock:
+            state['current']      = t
+            state['current_name'] = name
         try:
             r = scan_stock_data(t)
         except Exception:
             r = None
-        with _scan_lock:
+        with lock:
             _counter[0] += 1
-            _scan_state['done'] = _counter[0]
+            state['done'] = _counter[0]
         return r
 
     with ThreadPoolExecutor(max_workers=12) as ex:
@@ -1443,43 +1597,45 @@ def _run_scan_thread():
             if data:
                 results.append(data)
 
-    # メタデータ（memo/custom_name）をスキャン結果に反映
-    meta = load_metadata()
+    # メタデータ（memo/custom_name）とセクター情報をスキャン結果に反映
+    meta = load_metadata(profile)
     for r in results:
         entry = meta.get(r['ticker'], {})
         if entry.get('custom_name'):
             r['custom_name'] = entry['custom_name']
-        r['memo'] = entry.get('memo', '')
+        r['memo']   = entry.get('memo', '')
+        r['sector'] = DISC_SECTORS.get(r['ticker'], '')
 
     # ── フェーズ1完了: 価格/MACDデータを先に保存 ──────────────────────────────
     prices_at = time.time()
+    cache_key = _pkey('scan_cache', profile)
     if SUPABASE_URL and SUPABASE_KEY:
-        _sb_save('scan_cache', {'results': results, 'updated_at': prices_at})
-    with _scan_lock:
-        _scan_state.update({'status': 'done', 'phase': 'prices_done',
-                            'results': list(results), 'updated_at': prices_at,
-                            'done': total})
+        _sb_save(cache_key, {'results': results, 'updated_at': prices_at})
+    with lock:
+        state.update({'status': 'done', 'phase': 'prices_done',
+                      'results': list(results), 'updated_at': prices_at,
+                      'done': total})
 
     # ── フェーズ2: 決算日を順次取得 ───────────────────────────────────────────
-    with _scan_lock:
-        _scan_state['phase'] = 'cooldown'
+    with lock:
+        state['phase'] = 'cooldown'
     time.sleep(90)
 
     EARN_RANK = {'買い': 0, '上昇トレンド': 1, '様子見': 2, '下降トレンド': 3, '売り': 4}
     earnings_targets = sorted(results, key=lambda r: EARN_RANK.get(r.get('signal', ''), 5))[:60]
     earn_total = len(earnings_targets)
-    print(f'[scan] 決算日取得対象: {earn_total}/{len(results)}銘柄')
+    print(f'[scan:{profile or "default"}] 決算日取得対象: {earn_total}/{len(results)}銘柄')
 
-    with _scan_lock:
-        _scan_state.update({'phase': 'earnings', 'earn_total': earn_total,
-                            'earn_done': 0, 'earn_current': '', 'earn_current_name': ''})
+    with lock:
+        state.update({'phase': 'earnings', 'earn_total': earn_total,
+                      'earn_done': 0, 'earn_current': '', 'earn_current_name': ''})
 
     earnings_ok = 0
     for i, r in enumerate(earnings_targets):
-        with _scan_lock:
-            _scan_state['earn_done']         = i
-            _scan_state['earn_current']      = r['ticker']
-            _scan_state['earn_current_name'] = STOCK_NAMES.get(r['ticker'], r['ticker'])
+        with lock:
+            state['earn_done']         = i
+            state['earn_current']      = r['ticker']
+            state['earn_current_name'] = STOCK_NAMES.get(r['ticker'], r['ticker'])
         try:
             e = fetch_next_earnings(normalize_ticker(r['ticker']))
             r['next_earnings'] = e
@@ -1491,36 +1647,39 @@ def _run_scan_thread():
         _malloc_trim()
         time.sleep(2)
 
-    print(f'[scan] 決算日取得: {earnings_ok}/{earn_total}件')
+    print(f'[scan:{profile or "default"}] 決算日取得: {earnings_ok}/{earn_total}件')
     updated_at = time.time()
     if SUPABASE_URL and SUPABASE_KEY:
-        _sb_save('scan_cache', {'results': results, 'updated_at': updated_at})
-    with _scan_lock:
-        _scan_state.update({'status': 'done', 'phase': 'done',
-                            'results': results, 'updated_at': updated_at,
-                            'earn_done': earn_total})
+        _sb_save(cache_key, {'results': results, 'updated_at': updated_at})
+    with lock:
+        state.update({'status': 'done', 'phase': 'done',
+                      'results': results, 'updated_at': updated_at,
+                      'earn_done': earn_total})
 
 
 @app.route('/api/scan')
 def scan_signals():
     """スキャン状態を返す（バックグラウンドで実行してポーリング方式）"""
-    force = request.args.get('force', 'false') == 'true'
+    profile = _req_profile()
+    force   = request.args.get('force', 'false') == 'true'
+    cache_key = _pkey('scan_cache', profile)
+    scan_state, scan_lock = _get_scan_ctx(profile)
 
     # Supabaseキャッシュ確認
     if not force and SUPABASE_URL and SUPABASE_KEY:
-        cached = _sb_load('scan_cache')
+        cached = _sb_load(cache_key)
         if cached and time.time() - cached.get('updated_at', 0) < SCAN_CACHE_TTL:
-            with _scan_lock:
-                _scan_state.update({'status': 'done',
-                                    'results': cached['results'],
-                                    'updated_at': cached['updated_at']})
+            with scan_lock:
+                scan_state.update({'status': 'done',
+                                   'results': cached['results'],
+                                   'updated_at': cached['updated_at']})
             return jsonify({'status': 'done',
                             'results': cached['results'],
                             'updated_at': cached['updated_at']})
 
     # メモリ上の状態確認
-    with _scan_lock:
-        state = dict(_scan_state)
+    with scan_lock:
+        state = dict(scan_state)
 
     if state['status'] == 'done' and not force:
         return jsonify({'status': 'done',
@@ -1529,12 +1688,11 @@ def scan_signals():
 
     # バックグラウンドスレッド起動（まだ動いていない場合）
     if state['status'] != 'running':
-        with _scan_lock:
-            _scan_state['status'] = 'running'
-        # force scan時はSupabaseキャッシュを即座に無効化（古い結果が表示されないよう）
+        with scan_lock:
+            scan_state['status'] = 'running'
         if force and SUPABASE_URL and SUPABASE_KEY:
-            _sb_save('scan_cache', {'results': [], 'updated_at': 0})
-        t = threading.Thread(target=_run_scan_thread, daemon=True)
+            _sb_save(cache_key, {'results': [], 'updated_at': 0})
+        t = threading.Thread(target=_run_scan_thread, args=(profile,), daemon=True)
         t.start()
 
     return jsonify({
@@ -1554,7 +1712,8 @@ def scan_signals():
 
 @app.route('/api/scan-list', methods=['GET'])
 def get_scan_list():
-    all_stocks, custom = load_scan_list()
+    profile = _req_profile()
+    all_stocks, custom = load_scan_list(profile)
     auto_stocks, auto_updated_at = load_auto_scan_list()
     return jsonify({
         'default_count':   len(SCAN_STOCKS),
@@ -1599,14 +1758,15 @@ def refresh_auto_scan_list():
 
 @app.route('/api/scan-list', methods=['POST'])
 def add_to_scan_list():
-    body = request.get_json(silent=True) or {}
-    raw  = body.get('ticker', '').strip().upper()
+    body    = request.get_json(silent=True) or {}
+    profile = _safe_profile(body.get('profile', ''))
+    raw     = body.get('ticker', '').strip().upper()
     if not raw:
         return jsonify({'error': 'ティッカーを入力してください'}), 400
 
     disp = display_ticker(normalize_ticker(raw))
     default_disps = [display_ticker(normalize_ticker(t)) for t in SCAN_STOCKS]
-    _, custom = load_scan_list()
+    _, custom = load_scan_list(profile)
 
     if disp in default_disps or disp in custom:
         return jsonify({'error': 'すでにスキャンリストに含まれています'}), 400
@@ -1619,21 +1779,22 @@ def add_to_scan_list():
         return jsonify({'error': str(e)}), 400
 
     custom.append(disp)
-    save_scan_list(custom)
-    _invalidate_scan_cache()
+    save_scan_list(custom, profile)
+    _invalidate_scan_cache(profile)
 
     return jsonify({'success': True, 'custom': custom, 'total': len(SCAN_STOCKS) + len(custom)})
 
 
 @app.route('/api/scan-list/<ticker>', methods=['DELETE'])
 def remove_from_scan_list(ticker):
+    profile = _req_profile()
     disp = display_ticker(normalize_ticker(ticker.upper()))
-    _, custom = load_scan_list()
+    _, custom = load_scan_list(profile)
     if disp not in custom:
         return jsonify({'error': 'ユーザー追加銘柄にしか削除できません'}), 400
     custom.remove(disp)
-    save_scan_list(custom)
-    _invalidate_scan_cache()
+    save_scan_list(custom, profile)
+    _invalidate_scan_cache(profile)
     return jsonify({'success': True, 'custom': custom, 'total': len(SCAN_STOCKS) + len(custom)})
 
 
@@ -1672,8 +1833,9 @@ def search_ticker():
 
 @app.route('/api/stock/<ticker>')
 def get_stock(ticker):
+    profile = _req_profile()
     try:
-        return jsonify(enrich_with_metadata(fetch_stock_data(ticker)))
+        return jsonify(enrich_with_metadata(fetch_stock_data(ticker), profile))
     except ValueError as e:
         return jsonify({'error': str(e)}), 404
     except Exception as e:
@@ -1716,8 +1878,10 @@ def debug_one_earnings(ticker):
 @app.route('/api/debug/scan-status')
 def debug_scan_status():
     """一時デバッグ: スキャン進行フェーズとキャッシュ内の決算日を確認"""
-    with _scan_lock:
-        state = dict(_scan_state)
+    profile   = _req_profile()
+    scan_state, scan_lock = _get_scan_ctx(profile)
+    with scan_lock:
+        state = dict(scan_state)
 
     earnings_sample = []
     earnings_count = 0
@@ -1730,7 +1894,7 @@ def debug_scan_status():
     sb_earnings_count = 0
     sb_updated_at = None
     if SUPABASE_URL and SUPABASE_KEY:
-        cached = _sb_load('scan_cache')
+        cached = _sb_load(_pkey('scan_cache', profile))
         if cached and cached.get('results'):
             sb_earnings_count = sum(1 for r in cached['results'] if r.get('next_earnings'))
             sb_updated_at = cached.get('updated_at')
@@ -1749,6 +1913,7 @@ def debug_scan_status():
 # ── 起動時初期化 ──────────────────────────────────────────────────────────────
 _ai_cache.update(_load_ai_comments())
 print(f'[startup] AI解説キャッシュ読み込み: {len(_ai_cache)}件')
+_load_disc_cache()  # 発掘スキャンの前回結果を復元
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
