@@ -1510,7 +1510,7 @@ def _run_discovery_thread(market: str):
             _disc_state[market]['done'] = _counter[0]
         return r
 
-    with ThreadPoolExecutor(max_workers=12) as ex:
+    with ThreadPoolExecutor(max_workers=5) as ex:
         for data in ex.map(safe, targets):
             if data:
                 all_results.append(data)
@@ -1635,7 +1635,7 @@ def _run_scan_thread(profile: str = ''):
             state['done'] = _counter[0]
         return r
 
-    with ThreadPoolExecutor(max_workers=12) as ex:
+    with ThreadPoolExecutor(max_workers=5) as ex:
         for data in ex.map(safe, all_stocks):
             if data:
                 results.append(data)
