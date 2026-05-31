@@ -1083,6 +1083,34 @@ def update_metadata(ticker):
     return jsonify({'success': True, 'ticker': disp, **entry})
 
 
+@app.route('/api/news/<ticker>')
+def stock_news(ticker: str):
+    """銘柄の直近ニュースをyfinanceから取得して返す"""
+    try:
+        symbol = normalize_ticker(ticker)
+        raw_news = yf.Ticker(symbol).news or []
+        items = []
+        for n in raw_news[:8]:
+            content = n.get('content') or {}
+            title   = content.get('title') or n.get('title', '')
+            url     = (content.get('canonicalUrl') or {}).get('url') or n.get('link', '')
+            pub_ts  = content.get('pubDate') or ''
+            publisher = (content.get('provider') or {}).get('displayName') or n.get('publisher', '')
+            if not title:
+                continue
+            pub_str = ''
+            if pub_ts:
+                try:
+                    dt = datetime.fromisoformat(pub_ts.replace('Z', '+00:00'))
+                    pub_str = dt.strftime('%Y-%m-%d')
+                except Exception:
+                    pass
+            items.append({'title': title, 'url': url, 'date': pub_str, 'publisher': publisher})
+        return jsonify({'news': items})
+    except Exception as e:
+        return jsonify({'news': [], 'error': str(e)})
+
+
 @app.route('/api/ai-comment', methods=['POST'])
 def ai_comment():
     """ウォッチリスト銘柄のAI解説を生成（Google Gemini API 無料利用）"""
@@ -1118,8 +1146,8 @@ def ai_comment():
     market_label = '日本株' if is_jp else '米国株'
     price_str    = f'{price:,.0f}円' if is_jp else f'${price:.2f}'
 
-    prompt = f"""あなたは株式市場の専門アナリストです。以下の月足MACDデータを基に、この銘柄の現在の状況と直近の動向を日本語で3〜4文で簡潔に解説してください。
-投資家にとってわかりやすく、具体的な数値や日付を交えて説明してください。
+
+    prompt = f"""あなたは株式市場の専門アナリストです。以下のMACDデータと、あなた自身が持つ{name}に関する最新の知識（業績・決算・ニュース・業界動向など）を組み合わせて、日本語で4〜5文で解説してください。
 
 【銘柄情報】
 銘柄名: {name}
@@ -1134,7 +1162,12 @@ MACD値: {macd_val:+.4f}
 最終ゴールデンクロス（GC）: {last_gc}
 最終デッドクロス（DC）: {last_dc}
 
-月足MACDは長期トレンドを示す指標です。上記を踏まえ、トレンドの強さ・方向性・注目すべきポイントを解説してください。"""
+【解説の構成】
+1. 現在のMACDトレンドの状況（数値を交えて簡潔に）
+2. あなたが知っている直近の決算・業績修正・ニュース・業界環境など、このトレンドの背景となる具体的な要因
+3. 投資家として注目すべき今後のポイント
+
+MACDの数値説明にとどまらず、「なぜこのトレンドが生まれているか」を業績・ニュース・業界の観点から具体的に述べてください。知っている限り最新の情報を積極的に活用してください。"""
 
     # 利用可能なモデルを順番に試す（404なら次のモデルへ）
     _GEMINI_MODELS = [
@@ -1246,17 +1279,27 @@ def _load_disc_cache():
 
 
 def _save_disc_cache(market: str):
-    """発掘スキャン結果をファイル/Supabaseに保存"""
+    """発掘スキャン結果をファイル/Supabaseに保存（それぞれ独立して実行）"""
+    with _disc_lock:
+        state = dict(_disc_state[market])
+    cache_data = {
+        'status':     'done',
+        'results':    state.get('results', {}),
+        'updated_at': state.get('updated_at', 0),
+        'total':      state.get('total', 0),
+    }
+    buy_cnt = len(cache_data['results'].get('buy', []))
+
+    # Supabase（優先・独立して実行）
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            _sb_save(f'disc_cache_{market}', cache_data)
+            print(f'[disc_cache] Supabase保存完了({market}): 買い{buy_cnt}件')
+        except Exception as e:
+            print(f'[disc_cache] Supabase保存エラー({market}): {e}')
+
+    # ローカルファイル（独立して実行）
     try:
-        with _disc_lock:
-            state = dict(_disc_state[market])
-        cache_data = {
-            'status':     'done',
-            'results':    state.get('results', {}),
-            'updated_at': state.get('updated_at', 0),
-            'total':      state.get('total', 0),
-        }
-        # ローカルファイル
         existing: dict = {}
         if os.path.exists(DISC_CACHE_FILE):
             try:
@@ -1267,13 +1310,9 @@ def _save_disc_cache(market: str):
         existing[market] = cache_data
         with open(DISC_CACHE_FILE, 'w', encoding='utf-8') as f:
             json.dump(existing, f, ensure_ascii=False)
-        # Supabase
-        if SUPABASE_URL and SUPABASE_KEY:
-            _sb_save(f'disc_cache_{market}', cache_data)
-        buy_cnt = len(cache_data['results'].get('buy', []))
-        print(f'[disc_cache] 保存完了({market}): 買い{buy_cnt}件')
+        print(f'[disc_cache] ファイル保存完了({market}): 買い{buy_cnt}件')
     except Exception as e:
-        print(f'[disc_cache] 保存エラー: {e}')
+        print(f'[disc_cache] ファイル保存エラー({market}): {e}')
 
 
 def load_auto_scan_list():

@@ -361,6 +361,17 @@ header {
   padding:12px 14px; font-size:13px; color:var(--text); line-height:1.75; min-height:36px; }
 .ai-comment-box.loading { color:var(--muted); font-style:italic; }
 .ai-comment-box.error   { color:#f85149; font-size:12px; }
+/* ── ニュースセクション ── */
+.news-section { margin-top:16px; }
+.news-section-title { font-size:11px; font-weight:600; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+.news-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:5px; }
+.news-item { background:var(--bg3); border:1px solid var(--border); border-radius:6px;
+  padding:7px 10px; display:flex; gap:8px; align-items:baseline; }
+.news-date { font-size:10px; color:var(--muted); white-space:nowrap; flex-shrink:0; }
+.news-title a { font-size:12px; color:var(--text); text-decoration:none; line-height:1.5; }
+.news-title a:hover { color:var(--blue); text-decoration:underline; }
+.news-loading { font-size:11px; color:var(--muted); font-style:italic; padding:6px 0; }
 .btn-ai { background:rgba(99,102,241,.15); color:#818cf8; border:1px solid rgba(99,102,241,.4);
   padding:3px 10px; border-radius:5px; font-size:11px; font-weight:600; cursor:pointer; transition:all .15s; }
 .btn-ai:hover { background:rgba(99,102,241,.3); }
@@ -1209,7 +1220,10 @@ function renderDetail(data) {
       <div class="detail-left">
         <div class="d-name">${escapeHtml(displayName)}<a class="ext-link" href="${detailExtUrl}" target="_blank" rel="noopener noreferrer" title="外部サイトで開く">↗</a></div>
         <div class="d-meta">${data.symbol} ｜ 月足 MACD (12,26,9) ｜ 更新: ${data.updated_at}</div>
-        <div class="d-sig"><span class="badge ${cfg.cls}" style="font-size:13px;padding:5px 14px">${cfg.lbl}</span></div>
+        <div class="d-sig">
+          <span class="badge ${cfg.cls}" style="font-size:13px;padding:5px 14px">${cfg.lbl}</span>
+          ${data.sector ? `<span class="card-sector" style="margin-left:8px;vertical-align:middle">${escapeHtml(data.sector)}</span>` : ''}
+        </div>
       </div>
       <div class="detail-right">
         <div class="d-price">${s}${fmtPrice(data.current_price, data.currency)}</div>
@@ -1239,6 +1253,12 @@ function renderDetail(data) {
       <div class="ai-comment-box loading" id="ai-comment-box">🤖 AIが月足MACDデータを分析中です…</div>
     </div>
 
+    <div class="news-section" id="news-section">
+      <div class="news-section-title">📰 直近ニュース</div>
+      <div class="news-loading" id="news-loading">取得中…</div>
+      <ul class="news-list" id="news-list" style="display:none"></ul>
+    </div>
+
     <div class="detail-memo-hd">
       <div class="detail-memo-lbl">メモ</div>
     </div>
@@ -1265,7 +1285,8 @@ function renderDetail(data) {
 
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   drawCharts(data);
-  fetchAiComment();   // パネル表示と同時にAI解説を自動取得
+  fetchAiComment();          // パネル表示と同時にAI解説を自動取得
+  fetchNews(data.ticker);    // ニュースも同時に取得
 }
 
 // ── AI解説 ─────────────────────────────────────────────────────────────────
@@ -1321,6 +1342,40 @@ async function fetchAiComment() {
     box.textContent = '通信エラーが発生しました。↻ 再取得をお試しください。';
   }
   if (btn) { btn.style.display = ''; btn.disabled = false; }
+}
+
+// ── ニュース取得 ────────────────────────────────────────────────────────────
+async function fetchNews(ticker) {
+  const loading = document.getElementById('news-loading');
+  const list    = document.getElementById('news-list');
+  if (!loading || !list) return;
+  loading.style.display = '';
+  list.style.display = 'none';
+  list.innerHTML = '';
+  try {
+    const res  = await fetch(_pq(`/api/news/${encodeURIComponent(ticker)}`));
+    const data = await res.json();
+    const items = data.news || [];
+    if (items.length === 0) {
+      loading.textContent = 'ニュースが見つかりませんでした';
+      return;
+    }
+    items.forEach(n => {
+      const li = document.createElement('li');
+      li.className = 'news-item';
+      const titleEl = n.url
+        ? `<a href="${escapeHtml(n.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(n.title)}</a>`
+        : escapeHtml(n.title);
+      li.innerHTML = `
+        <span class="news-date">${escapeHtml(n.date || '')}</span>
+        <span class="news-title">${titleEl}</span>`;
+      list.appendChild(li);
+    });
+    loading.style.display = 'none';
+    list.style.display = '';
+  } catch(e) {
+    loading.textContent = 'ニュースの取得に失敗しました';
+  }
 }
 
 // ── Zoom helpers ───────────────────────────────────────────────────────────
