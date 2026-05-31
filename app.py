@@ -660,11 +660,14 @@ def _sb_save(key, value):
     try:
         headers = _sb_headers()
         headers['Prefer'] = 'resolution=merge-duplicates'
-        http_requests.post(
+        resp = http_requests.post(
             f'{SUPABASE_URL}/rest/v1/settings',
             json={'key': key, 'value': value},
-            headers=headers, timeout=5
+            headers=headers, timeout=10
         )
+        if resp.status_code not in (200, 201, 204):
+            print(f'Supabase save error ({key}): HTTP {resp.status_code} {resp.text[:200]}')
+            return False
         return True
     except Exception as e:
         print(f'Supabase save error ({key}): {e}')
