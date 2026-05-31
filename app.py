@@ -644,11 +644,12 @@ def _sb_load(key):
     """Supabaseのsettingsテーブルからvalueを取得する"""
     try:
         res = http_requests.get(
-            f'{SUPABASE_URL}/rest/v1/settings?key=eq.{key}&select=value',
+            f'{SUPABASE_URL}/rest/v1/settings',
+            params={'key': f'eq.{key}', 'select': 'value'},
             headers=_sb_headers(), timeout=5
         )
-        res.encoding = 'utf-8'  # 日本語を含むレスポンスのエンコーディングを明示
-        data = res.json()
+        # res.content（生バイト）からUTF-8で明示デコード（latin-1誤検出回避）
+        data = json.loads(res.content.decode('utf-8'))
         if data:
             return data[0]['value']
     except Exception as e:
