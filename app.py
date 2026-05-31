@@ -647,6 +647,7 @@ def _sb_load(key):
             f'{SUPABASE_URL}/rest/v1/settings?key=eq.{key}&select=value',
             headers=_sb_headers(), timeout=5
         )
+        res.encoding = 'utf-8'  # 日本語を含むレスポンスのエンコーディングを明示
         data = res.json()
         if data:
             return data[0]['value']
