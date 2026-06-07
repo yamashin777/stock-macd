@@ -25,6 +25,7 @@ app = Flask(__name__)
 
 WATCHLIST_FILE    = 'watchlist.json'
 METADATA_FILE     = 'metadata.json'
+SCAN_LIST_FILE    = 'scan_list.json'
 DEFAULT_WATCHLIST = ['AAPL', 'NVDA', '7203', '1605']
 
 # ── スキャン対象銘柄リスト & 名前辞書 ─────────────────────────────────────────
@@ -743,6 +744,17 @@ def load_metadata(profile: str = '') -> dict:
         data = _sb_load(key)
         if data is not None:
             return data
+        # Supabaseが空だがローカルにデータがある → 自動同期
+        if os.path.exists(fpath):
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    local_data = json.load(f)
+                if local_data:
+                    print(f'[metadata] Supabaseが空 → ローカルから自動同期')
+                    _sb_save(key, local_data)
+                    return local_data
+            except Exception:
+                pass
     if os.path.exists(fpath):
         try:
             with open(fpath, 'r', encoding='utf-8') as f:
@@ -755,11 +767,16 @@ def load_metadata(profile: str = '') -> dict:
 def save_metadata(meta: dict, profile: str = '') -> None:
     key   = _pkey('metadata', profile)
     fpath = _pfile(METADATA_FILE, profile)
+    sb_ok = False
     if SUPABASE_URL and SUPABASE_KEY:
-        if _sb_save(key, meta):
-            return
-    with open(fpath, 'w', encoding='utf-8') as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
+        sb_ok = _sb_save(key, meta)
+        if not sb_ok:
+            print(f'[metadata] Supabase保存失敗 → ローカルファイルに保存: {fpath}')
+    try:
+        with open(fpath, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f'[metadata] ローカル保存エラー: {e}')
 
 
 def enrich_with_metadata(result: dict, profile: str = '') -> dict:
@@ -1469,13 +1486,32 @@ def load_scan_list(profile: str = ''):
     """デフォルト + 自動取得 + 手動追加 を重複排除してマージ"""
     custom = []
     auto_stocks = []
+    key   = _pkey('scan_list', profile)
+    fpath = _pfile(SCAN_LIST_FILE, profile)
     if SUPABASE_URL and SUPABASE_KEY:
-        d = _sb_load(_pkey('scan_list', profile))
+        d = _sb_load(key)
         if isinstance(d, list):
             custom = d
+        elif os.path.exists(fpath):
+            # Supabaseが空だがローカルにデータがある → 自動同期
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    local_d = json.load(f)
+                if isinstance(local_d, list) and local_d:
+                    print(f'[scan_list] Supabaseが空 → ローカルから自動同期: {local_d}')
+                    _sb_save(key, local_d)
+                    custom = local_d
+            except Exception:
+                pass
         auto_data, _ = load_auto_scan_list()
         if isinstance(auto_data, list):
             auto_stocks = auto_data
+    elif os.path.exists(fpath):
+        try:
+            with open(fpath, 'r', encoding='utf-8') as f:
+                custom = json.load(f)
+        except Exception:
+            pass
 
     default_disps = set(display_ticker(normalize_ticker(t)) for t in SCAN_STOCKS)
     seen = set(default_disps)
@@ -1496,8 +1532,18 @@ def load_scan_list(profile: str = ''):
 
 
 def save_scan_list(custom: list, profile: str = '') -> None:
+    key   = _pkey('scan_list', profile)
+    fpath = _pfile(SCAN_LIST_FILE, profile)
+    sb_ok = False
     if SUPABASE_URL and SUPABASE_KEY:
-        _sb_save(_pkey('scan_list', profile), custom)
+        sb_ok = _sb_save(key, custom)
+        if not sb_ok:
+            print(f'[scan_list] Supabase保存失敗 → ローカルファイルに保存: {fpath}')
+    try:
+        with open(fpath, 'w', encoding='utf-8') as f:
+            json.dump(custom, f, ensure_ascii=False)
+    except Exception as e:
+        print(f'[scan_list] ローカル保存エラー: {e}')
 
 
 def _invalidate_scan_cache(profile: str = ''):
