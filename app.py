@@ -665,7 +665,7 @@ def _sb_save(key, value):
         base = f'{SUPABASE_URL}/rest/v1/settings'
         h = _sb_headers()
         h_count = {**h, 'Prefer': 'count=exact'}
-        # まず既存行をPATCH（UPDATE）。マッチなしでもデータ消失なし
+        # まず既存行をPATCH（UPDATE）
         patch_resp = http_requests.patch(
             base,
             params={'key': f'eq.{key}'},
@@ -674,12 +674,16 @@ def _sb_save(key, value):
             timeout=10,
         )
         if patch_resp.status_code in (200, 204):
-            # Content-Range: 0-0/1 のように更新件数が返る
             cr = patch_resp.headers.get('Content-Range', '')
-            updated = int(cr.split('/')[-1]) if '/' in cr else -1
-            if updated != 0:
+            # Content-Range: */0 or 0-0/0 → 0件更新 → INSERT必要
+            # Content-Range: 0-0/1 → 1件更新 → 成功
+            try:
+                updated = int(cr.split('/')[-1])
+            except Exception:
+                updated = -1  # 不明な場合はINSERTも試みる
+            if updated > 0:
                 return True  # 更新成功
-        # 行が存在しない（updated==0）か PATCHが失敗した場合 → INSERT
+        # 行が存在しない or PATCH失敗 → INSERT
         ins_resp = http_requests.post(
             base,
             json={'key': key, 'value': value},
@@ -2101,7 +2105,7 @@ def debug_supabase_test():
     return jsonify(results)
 
 
-@app.route('/api/debug/watchlist-sync', methods=['POST'])
+@app.route('/api/debug/watchlist-sync', methods=['GET', 'POST'])
 def debug_watchlist_sync():
     """ローカルファイルの内容をSupabaseへ強制同期する"""
     profile = _req_profile()
