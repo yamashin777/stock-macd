@@ -1145,8 +1145,7 @@ function cardHTML(t, d, i) {
   const sigClass    = d.signal === '買い' ? ' signal-buy' : d.signal === '売り' ? ' signal-sell' : '';
   const extUrl      = externalUrl(d.symbol, d.ticker);
   const sectorHtml  = d.sector ? `<div class="card-sector">${escapeHtml(d.sector)}</div>` : '';
-  const earningsHtml = d.next_earnings
-    ? `<div class="card-earnings">決算: ${escapeHtml(d.next_earnings)}</div>` : '';
+  const earningsHtml = '';
 
   return `<div class="card${act}${mktClass}${sigClass}" id="card-${t}" onclick="selectCard('${t}')">
     <div class="card-head">
@@ -1247,6 +1246,8 @@ function renderDetail(data) {
         <div class="stat-val">${data.signal_value.toFixed(4)}</div></div>
       <div class="stat"><div class="stat-lbl">ヒストグラム</div>
         <div class="stat-val ${hc}">${data.histogram_value >= 0 ? '+' : ''}${data.histogram_value.toFixed(4)}</div></div>
+      ${data.next_earnings ? `<div class="stat"><div class="stat-lbl">次回決算</div>
+        <div class="stat-val" style="color:var(--accent)">${escapeHtml(data.next_earnings)}</div></div>` : ''}
     </div>
 
     <div class="ai-section" id="ai-section">
