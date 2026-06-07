@@ -593,6 +593,7 @@ def _req_profile() -> str:
 
 # ── 発掘スキャン キャッシュ定数 ─────────────────────────────────────────────
 DISC_CACHE_FILE = 'disc_cache.json'
+SCAN_CACHE_FILE = 'scan_cache.json'
 
 # ── AI解説キャッシュ（永続化 + メモリキャッシュ）────────────────────────────
 AI_COMMENTS_FILE = 'ai_comments.json'
@@ -1764,8 +1765,15 @@ def _run_scan_thread(profile: str = ''):
     # ── フェーズ1完了: 価格/MACDデータを先に保存 ──────────────────────────────
     prices_at = time.time()
     cache_key = _pkey('scan_cache', profile)
+    cache_data_p1 = {'results': results, 'updated_at': prices_at}
     if SUPABASE_URL and SUPABASE_KEY:
-        _sb_save(cache_key, {'results': results, 'updated_at': prices_at})
+        _sb_save(cache_key, cache_data_p1)
+    try:
+        fpath_sc = _pfile(SCAN_CACHE_FILE, profile)
+        with open(fpath_sc, 'w', encoding='utf-8') as f:
+            json.dump(cache_data_p1, f, ensure_ascii=False)
+    except Exception as e:
+        print(f'[scan_cache] ローカル保存エラー(p1): {e}')
     with lock:
         state.update({'status': 'done', 'phase': 'prices_done',
                       'results': list(results), 'updated_at': prices_at,
@@ -1804,8 +1812,15 @@ def _run_scan_thread(profile: str = ''):
 
     print(f'[scan:{profile or "default"}] 決算日取得: {earnings_ok}/{earn_total}件')
     updated_at = time.time()
+    cache_data_p2 = {'results': results, 'updated_at': updated_at}
     if SUPABASE_URL and SUPABASE_KEY:
-        _sb_save(cache_key, {'results': results, 'updated_at': updated_at})
+        _sb_save(cache_key, cache_data_p2)
+    try:
+        fpath_sc = _pfile(SCAN_CACHE_FILE, profile)
+        with open(fpath_sc, 'w', encoding='utf-8') as f:
+            json.dump(cache_data_p2, f, ensure_ascii=False)
+    except Exception as e:
+        print(f'[scan_cache] ローカル保存エラー(p2): {e}')
     with lock:
         state.update({'status': 'done', 'phase': 'done',
                       'results': results, 'updated_at': updated_at,
@@ -1820,9 +1835,25 @@ def scan_signals():
     cache_key = _pkey('scan_cache', profile)
     scan_state, scan_lock = _get_scan_ctx(profile)
 
-    # Supabaseキャッシュ確認
-    if not force and SUPABASE_URL and SUPABASE_KEY:
-        cached = _sb_load(cache_key)
+    # Supabase → ローカルファイルの順でキャッシュ確認
+    if not force:
+        cached = None
+        if SUPABASE_URL and SUPABASE_KEY:
+            cached = _sb_load(cache_key)
+        if not (cached and time.time() - cached.get('updated_at', 0) < SCAN_CACHE_TTL):
+            # Supabaseになければローカルファイルを確認
+            fpath_sc = _pfile(SCAN_CACHE_FILE, profile)
+            if os.path.exists(fpath_sc):
+                try:
+                    with open(fpath_sc, 'r', encoding='utf-8') as f:
+                        local_cached = json.load(f)
+                    if time.time() - local_cached.get('updated_at', 0) < SCAN_CACHE_TTL:
+                        cached = local_cached
+                        # ローカルにあってSupabaseにない → 同期
+                        if SUPABASE_URL and SUPABASE_KEY:
+                            _sb_save(cache_key, cached)
+                except Exception:
+                    pass
         if cached and time.time() - cached.get('updated_at', 0) < SCAN_CACHE_TTL:
             with scan_lock:
                 scan_state.update({'status': 'done',
