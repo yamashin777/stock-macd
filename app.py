@@ -700,6 +700,17 @@ def load_watchlist(profile: str = '') -> list:
         data = _sb_load(key)
         if data is not None:
             return data
+        # Supabaseが空だがローカルにデータがある → Supabaseへ自動同期
+        if os.path.exists(fpath):
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    local_data = json.load(f)
+                if local_data:
+                    print(f'[watchlist] Supabaseが空 → ローカルから自動同期: {local_data}')
+                    _sb_save(key, local_data)
+                    return local_data
+            except Exception:
+                pass
     if os.path.exists(fpath):
         try:
             with open(fpath, 'r', encoding='utf-8') as f:
@@ -1963,6 +1974,22 @@ def debug_watchlist_check():
         except Exception as e:
             result['local_file_error'] = str(e)
     return jsonify(result)
+
+
+@app.route('/api/debug/watchlist-sync', methods=['POST'])
+def debug_watchlist_sync():
+    """ローカルファイルの内容をSupabaseへ強制同期する"""
+    profile = _req_profile()
+    key = _pkey('watchlist', profile)
+    fpath = _pfile(WATCHLIST_FILE, profile)
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        return jsonify({'error': 'Supabase未設定'}), 400
+    if not os.path.exists(fpath):
+        return jsonify({'error': 'ローカルファイルが存在しません'}), 404
+    with open(fpath, 'r', encoding='utf-8') as f:
+        wl = json.load(f)
+    ok = _sb_save(key, wl)
+    return jsonify({'success': ok, 'synced': wl})
 
 
 @app.route('/api/debug/earnings/<ticker>')
