@@ -647,7 +647,7 @@ def _sb_load(key):
     try:
         res = http_requests.get(
             f'{SUPABASE_URL}/rest/v1/settings',
-            params={'key': f'eq.{key}', 'select': 'value', 'order': 'id.desc', 'limit': '1'},
+            params={'key': f'eq.{key}', 'select': 'value', 'limit': '1'},
             headers=_sb_headers(), timeout=5
         )
         # res.content（生バイト）からUTF-8で明示デコード（latin-1誤検出回避）
