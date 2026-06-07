@@ -2053,6 +2053,54 @@ def debug_watchlist_check():
     return jsonify(result)
 
 
+@app.route('/api/debug/supabase-test')
+def debug_supabase_test():
+    """Supabaseへの読み書きを詳細診断する"""
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        return jsonify({'error': 'Supabase未設定'}), 400
+    base = f'{SUPABASE_URL}/rest/v1/settings'
+    h = _sb_headers()
+    results = {'url': SUPABASE_URL, 'key_prefix': SUPABASE_KEY[:8] + '...'}
+
+    # 1. SELECT テスト
+    try:
+        r = http_requests.get(base, params={'key': 'eq.__test__', 'select': 'key,value'}, headers=h, timeout=5)
+        results['select'] = {'status': r.status_code, 'body': r.text[:200]}
+    except Exception as e:
+        results['select'] = {'error': str(e)}
+
+    # 2. INSERT テスト
+    try:
+        r = http_requests.post(base, json={'key': '__test__', 'value': ['ok']}, headers=h, timeout=10)
+        results['insert'] = {'status': r.status_code, 'body': r.text[:200]}
+    except Exception as e:
+        results['insert'] = {'error': str(e)}
+
+    # 3. PATCH テスト
+    try:
+        h2 = {**h, 'Prefer': 'count=exact'}
+        r = http_requests.patch(base, params={'key': 'eq.__test__'}, json={'value': ['ok2']}, headers=h2, timeout=10)
+        results['patch'] = {'status': r.status_code, 'content-range': r.headers.get('Content-Range'), 'body': r.text[:200]}
+    except Exception as e:
+        results['patch'] = {'error': str(e)}
+
+    # 4. SELECT で確認
+    try:
+        r = http_requests.get(base, params={'key': 'eq.__test__', 'select': 'value', 'order': 'id.desc', 'limit': '1'}, headers=h, timeout=5)
+        results['select_after'] = {'status': r.status_code, 'body': r.text[:200]}
+    except Exception as e:
+        results['select_after'] = {'error': str(e)}
+
+    # 5. DELETE でクリーンアップ
+    try:
+        r = http_requests.delete(base, params={'key': 'eq.__test__'}, headers=h, timeout=10)
+        results['delete'] = {'status': r.status_code}
+    except Exception as e:
+        results['delete'] = {'error': str(e)}
+
+    return jsonify(results)
+
+
 @app.route('/api/debug/watchlist-sync', methods=['POST'])
 def debug_watchlist_sync():
     """ローカルファイルの内容をSupabaseへ強制同期する"""
