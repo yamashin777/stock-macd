@@ -1246,8 +1246,17 @@ function renderDetail(data) {
         <div class="stat-val">${data.signal_value.toFixed(4)}</div></div>
       <div class="stat"><div class="stat-lbl">ヒストグラム</div>
         <div class="stat-val ${hc}">${data.histogram_value >= 0 ? '+' : ''}${data.histogram_value.toFixed(4)}</div></div>
-      ${data.next_earnings ? `<div class="stat"><div class="stat-lbl">次回決算</div>
-        <div class="stat-val" style="color:var(--accent)">${escapeHtml(data.next_earnings)}</div></div>` : ''}
+      ${(() => {
+        if (!data.next_earnings) return '';
+        const today = new Date(); today.setHours(0,0,0,0);
+        const eDate = new Date(data.next_earnings); eDate.setHours(0,0,0,0);
+        const days = Math.round((eDate - today) / 86400000);
+        if (days < 0) return '';
+        const cls = days <= 7 ? 'earn-imminent' : days <= 30 ? 'earn-soon' : days <= 60 ? 'earn-moderate' : '';
+        const label = days === 0 ? '本日' : `${days}日後`;
+        return `<div class="stat"><div class="stat-lbl">次回決算</div>
+          <div class="stat-val"><span class="${cls}">${label}</span> <span style="font-size:11px;color:var(--muted)">${escapeHtml(data.next_earnings.slice(5))}</span></div></div>`;
+      })()}
     </div>
 
     <div class="ai-section" id="ai-section">
