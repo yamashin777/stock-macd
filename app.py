@@ -650,12 +650,14 @@ def _sb_load(key):
             params={'key': f'eq.{key}', 'select': 'value', 'limit': '1'},
             headers=_sb_headers(), timeout=5
         )
-        # res.content（生バイト）からUTF-8で明示デコード（latin-1誤検出回避）
+        if res.status_code != 200:
+            print(f'Supabase load error ({key}): HTTP {res.status_code} {res.text[:100]}')
+            return None
         data = json.loads(res.content.decode('utf-8'))
-        if data:
+        if isinstance(data, list) and data:
             return data[0]['value']
     except Exception as e:
-        print(f'Supabase load error ({key}): {e}')
+        print(f'Supabase load error ({key}): {type(e).__name__}: {e}')
     return None
 
 
