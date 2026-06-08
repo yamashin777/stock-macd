@@ -1178,39 +1178,20 @@ def update_metadata(ticker):
 
 
 def _translate_titles_ja(titles: list[str]) -> list[str]:
-    """Gemini APIでニュースタイトルを日本語に一括翻訳する"""
-    if not GEMINI_API_KEY or not titles:
+    """Google Translate（無料）でニュースタイトルを日本語に翻訳する"""
+    if not titles:
         return titles
     try:
-        numbered = '\n'.join(f'{i+1}. {t}' for i, t in enumerate(titles))
-        prompt = (
-            '以下の英語ニュースタイトルを自然な日本語に翻訳してください。'
-            '番号付きリスト形式のまま返してください。タイトル以外の文章は不要です。\n\n' + numbered
-        )
-        payload = {
-            'contents': [{'parts': [{'text': prompt}]}],
-            'generationConfig': {'maxOutputTokens': 1024, 'temperature': 0.2},
-        }
-        for model in ['gemini-2.0-flash-lite', 'gemini-2.0-flash']:
-            url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
-                   f'{model}:generateContent?key={GEMINI_API_KEY}')
-            r = http_requests.post(url, json=payload, timeout=15)
-            if r.status_code == 200:
-                text = r.json()['candidates'][0]['content']['parts'][0]['text']
-                lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
-                translated = []
-                for line in lines:
-                    m = _re.match(r'^\d+[\.\)]\s*(.+)', line)
-                    translated.append(m.group(1) if m else line)
-                if len(translated) >= len(titles):
-                    return translated[:len(titles)]
-                # 行数が合わない場合でも使えるものは使う
-                if translated:
-                    # 足りない分は元のタイトルで補完
-                    return translated + titles[len(translated):]
-            else:
-                print(f'[news translate] {model}: HTTP {r.status_code}')
-        print('[news translate] 全モデル失敗 → 英語のまま表示')
+        from deep_translator import GoogleTranslator
+        translator = GoogleTranslator(source='auto', target='ja')
+        result = []
+        for t in titles:
+            try:
+                ja = translator.translate(t)
+                result.append(ja if ja else t)
+            except Exception:
+                result.append(t)
+        return result
     except Exception as e:
         print(f'[news translate] error: {e}')
     return titles
