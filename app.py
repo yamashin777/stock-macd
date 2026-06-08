@@ -1218,9 +1218,10 @@ def ai_comment():
     if not ticker:
         return jsonify({'error': 'ticker が指定されていません'}), 400
 
-    # キャッシュ確認（1時間）
+    # キャッシュ確認（force=trueの場合はスキップ）
+    force = body.get('force', False)
     cached = _ai_cache.get(ticker)
-    if cached and time.time() - cached['ts'] < _AI_CACHE_TTL:
+    if cached and not force and time.time() - cached['ts'] < _AI_CACHE_TTL:
         return jsonify({'comment': cached['text'], 'cached': True})
 
     # プロンプト構築

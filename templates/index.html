@@ -1262,7 +1262,7 @@ function renderDetail(data) {
     <div class="ai-section" id="ai-section">
       <div class="ai-section-hd">
         <div class="ai-section-lbl">🤖 AI解説（月足MACDトレンド分析）</div>
-        <button class="btn-ai" id="btn-ai-fetch" onclick="fetchAiComment()" style="display:none">↻ 再取得</button>
+        <button class="btn-ai" id="btn-ai-fetch" onclick="fetchAiComment(true)" style="display:none">↻ 再取得</button>
       </div>
       <div class="ai-comment-box loading" id="ai-comment-box">🤖 AIが月足MACDデータを分析中です…</div>
     </div>
@@ -1306,7 +1306,7 @@ function renderDetail(data) {
 // ── AI解説 ─────────────────────────────────────────────────────────────────
 let _aiRetryTimer = null;
 
-async function fetchAiComment() {
+async function fetchAiComment(force = false) {
   const box = document.getElementById('ai-comment-box');
   const btn = document.getElementById('btn-ai-fetch');
   if (!box || !detailData) return;
@@ -1334,6 +1334,7 @@ async function fetchAiComment() {
         currency:        detailData.currency,
         last_gc:         detailData.last_gc,
         last_dc:         detailData.last_dc,
+        force:           force,
       }),
     });
 
