@@ -2060,6 +2060,24 @@ def debug_watchlist_check():
     return jsonify(result)
 
 
+@app.route('/api/debug/gemini-test')
+def debug_gemini_test():
+    """Gemini APIの疎通確認"""
+    if not GEMINI_API_KEY:
+        return jsonify({'error': 'GEMINI_API_KEY未設定'})
+    results = {'key_prefix': GEMINI_API_KEY[:8] + '...', 'models': {}}
+    models = ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-flash']
+    payload = {'contents': [{'parts': [{'text': 'テスト'}]}], 'generationConfig': {'maxOutputTokens': 10}}
+    for model in models:
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}'
+        try:
+            r = http_requests.post(url, json=payload, timeout=15)
+            results['models'][model] = {'status': r.status_code, 'body': r.text[:150]}
+        except Exception as e:
+            results['models'][model] = {'error': str(e)[:150]}
+    return jsonify(results)
+
+
 @app.route('/api/debug/supabase-test')
 def debug_supabase_test():
     """Supabaseへの読み書きを詳細診断する"""
