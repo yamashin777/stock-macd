@@ -1198,12 +1198,17 @@ def _translate_titles_ja(titles: list[str]) -> list[str]:
                 lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
                 translated = []
                 for line in lines:
-                    # "1. タイトル" の形式から本文を抽出
                     m = _re.match(r'^\d+[\.\)]\s*(.+)', line)
                     translated.append(m.group(1) if m else line)
-                if len(translated) == len(titles):
-                    return translated
-                break
+                if len(translated) >= len(titles):
+                    return translated[:len(titles)]
+                # 行数が合わない場合でも使えるものは使う
+                if translated:
+                    # 足りない分は元のタイトルで補完
+                    return translated + titles[len(translated):]
+            else:
+                print(f'[news translate] {model}: HTTP {r.status_code}')
+        print('[news translate] 全モデル失敗 → 英語のまま表示')
     except Exception as e:
         print(f'[news translate] error: {e}')
     return titles
@@ -1233,7 +1238,8 @@ def stock_news(ticker: str):
                     pass
             items.append({'title': title, 'url': url, 'date': pub_str, 'publisher': publisher})
         # 日本語翻訳（8件まとめて1リクエスト）
-        if items:
+        # 英語タイトル（アルファベット主体）の場合のみ翻訳を試みる
+        if items and any(_re.search(r'[a-zA-Z]{3,}', it['title']) for it in items):
             orig_titles = [it['title'] for it in items]
             ja_titles = _translate_titles_ja(orig_titles)
             for it, ja in zip(items, ja_titles):
