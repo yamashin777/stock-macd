@@ -995,6 +995,9 @@ def fetch_stock_data(ticker: str) -> dict:
     disp_t = display_ticker(symbol)
     sector = DISC_SECTORS.get(disp_t, '') or _YF_SECTOR_JA.get(sector_yf, sector_yf)
 
+    # 銘柄名: STOCK_NAMES辞書（日本語）優先、なければyfinanceの英語名
+    name = STOCK_NAMES.get(disp_t) or name
+
     # 決算日: 既存のTickerオブジェクトを再利用して取得
     next_earnings = None
     try:
