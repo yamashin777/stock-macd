@@ -2464,6 +2464,7 @@ function _renderDiscResults(data) {
         <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
           <span class="disc-ticker">${safeT}</span>${gcStr}
         </div>
+        ${d.reason ? `<div style="font-size:10px;color:var(--blue);margin-top:2px;opacity:.85">📌 ${escapeHtml(d.reason)}</div>` : ''}
         ${d.memo ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📝 ${escapeHtml(d.memo)}</div>` : ''}
       </div>
       <div class="disc-price">${priceFmt} ${chgStr}</div>

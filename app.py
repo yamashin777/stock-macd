@@ -879,7 +879,7 @@ def scan_stock_data(ticker: str) -> dict:
     change_pct = (change / prev_close * 100) if prev_close else 0.0
 
     close = hist['Close']
-    macd, sig, _ = calculate_macd(close)
+    macd, sig, hist_s = calculate_macd(close)
     signal_text, signal_type = get_signal(macd, sig)
 
     last_gc = last_dc = None
@@ -893,6 +893,10 @@ def scan_stock_data(ticker: str) -> dict:
             last_gc = common[i].strftime('%Y-%m')
         elif pm >= ps and cm < cs:
             last_dc = common[i].strftime('%Y-%m')
+
+    def _lv(s):
+        d = s.dropna()
+        return round(float(d.iloc[-1]), 4) if not d.empty else 0.0
 
     # ミニチャート用: 直近18ヶ月のデータ
     chart_n = min(18, len(hist))
@@ -910,13 +914,16 @@ def scan_stock_data(ticker: str) -> dict:
         'change_pct':      change_pct,
         'signal':          signal_text,
         'signal_type':     signal_type,
+        'macd_value':      _lv(macd),
+        'signal_value':    _lv(sig),
+        'histogram_value': _lv(hist_s),
         'last_gc':         last_gc,
         'last_dc':         last_dc,
         'custom_name':     '',
         'memo':            '',
         'chart_close':     chart_close,
         'chart_macd_hist': chart_macd_hist,
-        'next_earnings':   None,  # _run_scan_thread で順次取得
+        'next_earnings':   None,
     }
 
 
@@ -1660,15 +1667,37 @@ def _run_discovery_thread(market: str):
             r['custom_name'] = entry['custom_name']
         r['memo'] = entry.get('memo', '')
 
-    # 3種に分類
+    # 直近GC経過月数を計算するヘルパー
+    def _gc_months_ago(ym_str):
+        if not ym_str:
+            return None
+        try:
+            y, m = map(int, ym_str.split('-'))
+            now = datetime.now()
+            return (now.year - y) * 12 + (now.month - m)
+        except Exception:
+            return None
+
+    # 3種に分類（signal_typeは 'buy'/'bullish'/'bearish'/'sell'/'neutral'）
     buy, uptrend, recent_gc = [], [], []
     for r in all_results:
-        st = r.get('signal_type', '')
+        st  = r.get('signal_type', '')
+        gc  = r.get('last_gc') or ''
+        dc  = r.get('last_dc') or ''
+        n   = _gc_months_ago(gc)
         if st == 'buy':
+            r['reason'] = f'今月 月足GCが成立（MACD線がシグナル線を上抜き）'
             buy.append(r)
-        elif st == 'uptrend':
+        elif st == 'bullish':          # ← 旧コードの 'uptrend' は誤りだったバグを修正
+            if gc:
+                months_str = f'{n}ヶ月前' if n else gc
+                r['reason'] = f'GC（{gc}）から上昇トレンド継続（{months_str}）'
+            else:
+                r['reason'] = 'MACD線＞シグナル線（上昇トレンド）'
             uptrend.append(r)
-        elif _is_recent_gc(r.get('last_gc'), months=6):
+        elif _is_recent_gc(gc, months=6):
+            months_str = f'{n}ヶ月前' if n is not None else ''
+            r['reason'] = f'直近GC: {gc}（{months_str}）' if months_str else f'直近GC: {gc}'
             recent_gc.append(r)
 
     # 買い/上昇トレンドはセクター順→ティッカー順にソート
