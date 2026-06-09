@@ -2491,19 +2491,20 @@ function _renderDiscResults(data) {
     return html;
   }
 
-  function section(title, color, items, useSectors) {
+  function section(title, color, condition, items, useSectors) {
     if (!items.length) return '';
     const body = useSectors ? sectionWithSectors(items) : items.map(discRow).join('');
     return `<div class="disc-section">
       <div class="disc-section-title" style="color:${color}">${title}&ensp;<span style="font-weight:400;font-size:11px">${items.length}銘柄</span></div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;padding-left:2px">条件: ${condition}</div>
       ${body}
     </div>`;
   }
 
   const found = buy.length + uptrend.length + recentGc.length;
-  let html = section('📈 買いシグナル',           'var(--green)',  buy,      true)
-           + section('🔼 上昇トレンド',           'var(--blue)',   uptrend,  true)
-           + section('⏰ 直近GCあり（6ヶ月以内）', 'var(--orange)', recentGc, false);
+  let html = section('📈 買いシグナル',           'var(--green)',  '月足MACDが今月ゴールデンクロス成立（MACD線がシグナル線を上抜き）',       buy,      true)
+           + section('🔼 上昇トレンド',           'var(--blue)',   '月足MACD線＞シグナル線（GC後の上昇トレンド継続中）',                   uptrend,  true)
+           + section('⏰ 直近GCあり（6ヶ月以内）', 'var(--orange)', '直近6ヶ月以内にGCが成立した銘柄（現在も上昇トレンド以外のものを含む）', recentGc, false);
 
   if (!found) {
     html = `<div class="sig-empty">シグナル銘柄は見つかりませんでした（スキャン対象: ${total}銘柄）</div>`;
