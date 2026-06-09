@@ -362,6 +362,32 @@ header {
   padding:12px 14px; font-size:13px; color:var(--text); line-height:1.75; min-height:36px; }
 .ai-comment-box.loading { color:var(--muted); font-style:italic; }
 .ai-comment-box.error   { color:#f85149; font-size:12px; }
+/* AI プロンプト確認ツールチップ */
+.ai-prompt-info {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:14px; height:14px; border-radius:50%;
+  background:var(--border); color:var(--muted);
+  font-size:9px; font-weight:700; font-style:normal;
+  cursor:help; margin-left:5px; vertical-align:middle;
+  position:relative; flex-shrink:0;
+}
+.ai-prompt-popup {
+  display:none; position:absolute;
+  bottom:calc(100% + 8px); right:0;
+  width:340px; max-height:260px; overflow-y:auto;
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:8px; padding:10px 12px;
+  font-size:11px; color:var(--text); line-height:1.65;
+  white-space:pre-wrap; word-break:break-all;
+  z-index:300; box-shadow:0 4px 16px rgba(0,0,0,.4);
+  text-transform:none; letter-spacing:normal; font-weight:400;
+}
+.ai-prompt-popup-title {
+  font-size:10px; font-weight:700; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.5px;
+  margin-bottom:6px; border-bottom:1px solid var(--border); padding-bottom:4px;
+}
+.ai-prompt-info:hover .ai-prompt-popup { display:block; }
 /* ── ニュースセクション ── */
 .news-section { margin-top:16px; }
 .news-section-title { font-size:11px; font-weight:600; color:var(--muted);
@@ -1261,7 +1287,15 @@ function renderDetail(data) {
 
     <div class="ai-section" id="ai-section">
       <div class="ai-section-hd">
-        <div class="ai-section-lbl">🤖 AI解説（月足MACDトレンド分析）</div>
+        <div class="ai-section-lbl" style="display:flex;align-items:center">
+          🤖 AI解説（月足MACDトレンド分析）
+          <i class="ai-prompt-info" id="ai-prompt-info-icon">ⓘ
+            <div class="ai-prompt-popup" id="ai-prompt-popup">
+              <div class="ai-prompt-popup-title">送信プロンプト（Gemini）</div>
+              <span id="ai-prompt-popup-text">取得中…</span>
+            </div>
+          </i>
+        </div>
         <button class="btn-ai" id="btn-ai-fetch" onclick="fetchAiComment(true)" style="display:none">↻ 再取得</button>
       </div>
       <div class="ai-comment-box loading" id="ai-comment-box">🤖 AIが月足MACDデータを分析中です…</div>
@@ -1306,6 +1340,13 @@ function renderDetail(data) {
 // ── AI解説 ─────────────────────────────────────────────────────────────────
 let _aiRetryTimer = null;
 
+function _updatePromptTooltip(promptText) {
+  const el = document.getElementById('ai-prompt-popup-text');
+  const icon = document.getElementById('ai-prompt-info-icon');
+  if (el) el.textContent = promptText || '（プロンプト情報なし）';
+  if (icon) icon.style.display = promptText ? '' : 'none';
+}
+
 async function fetchAiComment(force = false) {
   const box = document.getElementById('ai-comment-box');
   const btn = document.getElementById('btn-ai-fetch');
@@ -1317,6 +1358,8 @@ async function fetchAiComment(force = false) {
   box.className = 'ai-comment-box loading';
   box.textContent = '🤖 AIが月足MACDデータを分析中です…';
   if (btn) { btn.style.display = 'none'; btn.disabled = true; }
+  // プロンプト取得中表示
+  _updatePromptTooltip('取得中…');
 
   try {
     const res = await fetch('/api/ai-comment', {
@@ -1339,6 +1382,8 @@ async function fetchAiComment(force = false) {
     });
 
     const data = await res.json();
+    // プロンプトをツールチップに反映
+    if (data.prompt_used) _updatePromptTooltip(data.prompt_used);
     if (data.comment) {
       box.className = 'ai-comment-box';
       box.innerHTML = escapeHtml(data.comment).replace(/\n/g, '<br>');
