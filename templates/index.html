@@ -2772,6 +2772,13 @@ function renderSignalView() {
       ? `<span class="sig-date-dc">${d.last_dc}</span><span class="sig-months-ago">(${dcAgo}ヶ月前)</span>`
       : '<span class="sig-date-none">—</span>';
 
+    let earlyCell = '<span class="sig-date-none">—</span>';
+    if (isEarlySignal(d)) {
+      const wcfg = sigCfg(d.weekly_signal);
+      const wdate = d.weekly_signal_date ? `<br><span style="font-size:10px;color:var(--muted)">${d.weekly_signal_date}</span>` : '';
+      earlyCell = `<span class="early-mini-badge" title="週足MACDでは月足と逆方向の動きを検知">⚡ ${wcfg.lbl}</span>${wdate}`;
+    }
+
     return `<tr onclick="switchTab('watch'); setTimeout(()=>selectCard('${d.ticker}'),100)">
       <td>
         <div class="sig-name">
@@ -2784,6 +2791,7 @@ function renderSignalView() {
       <td class="sig-price">${s}${fmtPrice(d.current_price, d.currency)}<br><span class="${cc}" style="font-size:11px">${sgn}${d.change_pct.toFixed(2)}%</span></td>
       <td>${gcCell}</td>
       <td>${dcCell}</td>
+      <td>${earlyCell}</td>
     </tr>`;
   }
 
@@ -2795,7 +2803,7 @@ function renderSignalView() {
       <table class="sig-table">
         <thead><tr>
           <th>銘柄</th><th>現在シグナル</th><th>現在値</th>
-          <th>最終GC（買い）</th><th>最終DC（売り）</th>
+          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th>
         </tr></thead>
         <tbody>${recentGC.map(rowHTML).join('')}</tbody>
       </table>
@@ -2808,7 +2816,7 @@ function renderSignalView() {
       <table class="sig-table">
         <thead><tr>
           <th>銘柄</th><th>現在シグナル</th><th>現在値</th>
-          <th>最終GC（買い）</th><th>最終DC（売り）</th>
+          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th>
         </tr></thead>
         <tbody>${others.map(rowHTML).join('')}</tbody>
       </table>
