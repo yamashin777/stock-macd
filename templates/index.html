@@ -342,6 +342,26 @@ header {
 
 /* ── メモ & 編集 ─────────────────────────────── */
 .card-earnings { font-size:10px; color:var(--accent); margin-top:3px; }
+.early-signal-box {
+  margin-top: 8px; padding: 8px 12px; border-radius: 10px;
+  background: linear-gradient(135deg, #8a2387, #e94057, #f27121);
+  background-size: 200% 200%;
+  animation: early-signal-glow 3s ease-in-out infinite, early-signal-shift 6s ease infinite;
+  box-shadow: 0 0 12px rgba(233,64,87,.5);
+}
+.early-signal-tag {
+  display: inline-block; font-size: 11px; font-weight: 800; color: #fff;
+  margin-right: 6px; letter-spacing: .5px;
+}
+@keyframes early-signal-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(233,64,87,.4); }
+  50%      { box-shadow: 0 0 18px rgba(233,64,87,.8); }
+}
+@keyframes early-signal-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
 .card-memo { font-size:11px; color:var(--muted); line-height:1.4; margin-top:2px;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .btn-edit { background:none; border:none; color:var(--muted); cursor:pointer;
@@ -985,10 +1005,11 @@ function earlySignalHtml(data) {
       週次MACDも同方向（${escapeHtml(data.weekly_signal)}）— 月足シグナルと一致${dateStr}
     </div>`;
   }
-  return `<div class="early-signal-box" style="margin-top:8px;padding:6px 10px;border-radius:8px;background:var(--bg3);border:1px solid var(--border)">
-    <span style="font-size:10px;color:var(--muted)">⚡ 早期シグナル（週次MACD・月足確定前の兆候）</span><br>
-    <span class="badge ${wcfg.cls}" style="font-size:11px;padding:3px 10px;margin-top:3px;display:inline-block">${wcfg.lbl}</span>
-    <span style="font-size:10px;color:var(--muted)">${dateStr}</span>
+  return `<div class="early-signal-box">
+    <span class="early-signal-tag">⚡ 早期シグナル検知</span>
+    <span style="font-size:11px;color:#fff;opacity:.9">月足確定前に週次MACDで動きを検知しました</span><br>
+    <span class="badge ${wcfg.cls}" style="font-size:12px;padding:4px 12px;margin-top:5px;display:inline-block">${wcfg.lbl}</span>
+    <span style="font-size:10px;color:#fff;opacity:.75">${dateStr}</span>
   </div>`;
 }
 
@@ -1528,20 +1549,72 @@ function drawCharts(data) {
   const { dates, close, macd, signal, histogram } = getSlice(data.chart, currentPeriod);
   const s = sym(data.currency), cur = data.currency;
 
+  // 直近1ヶ月分を週次データに置き換える（月足確定前の早期の動きを色を変えて表示）
+  // ※ price/MACD両チャートで同じラベル配列を使う必要がある（ズーム同期のため）
+  let mDates = dates, mClose = close, mHist = histogram, mMacd = macd, mSignal = signal;
+  let weeklyClose = null, weeklyHist = null, weeklyMacd = null, weeklySig = null, weeklyStartIdx = -1;
+  const wr = data.weekly_recent;
+  if (wr && wr.dates && wr.dates.length && dates.length) {
+    const keptLen = dates.length - 1;  // 月足の最終バケットを週次に置き換える
+    mDates = dates.slice(0, keptLen).concat(wr.dates.map(d => d.slice(5)));  // "MM-DD"表示
+    weeklyStartIdx = keptLen;
+
+    mClose = close.slice(0, keptLen).concat(Array(wr.dates.length).fill(null));
+    weeklyClose = Array(Math.max(0, keptLen - 1)).fill(null)
+      .concat([close[keptLen - 1]])
+      .concat(wr.close);
+
+    mHist = histogram.slice(0, keptLen).concat(Array(wr.dates.length).fill(null));
+    weeklyHist = Array(keptLen).fill(null).concat(wr.histogram);
+
+    mMacd = macd.slice(0, keptLen).concat(Array(wr.dates.length).fill(null));
+    weeklyMacd = Array(Math.max(0, keptLen - 1)).fill(null)
+      .concat([macd[keptLen - 1]])   // 接続点（月足の最後の値を週次線の起点にする）
+      .concat(wr.macd);
+
+    mSignal = signal.slice(0, keptLen).concat(Array(wr.dates.length).fill(null));
+    weeklySig = Array(Math.max(0, keptLen - 1)).fill(null)
+      .concat([signal[keptLen - 1]])
+      .concat(wr.signal);
+  }
+  // クロス注釈用: 月次/週次のどちらかの値を採用したマージ系列
+  const mergedMacd   = mMacd.map((v, i) => v ?? (weeklyMacd ? weeklyMacd[i] : null));
+  const mergedSignal = mSignal.map((v, i) => v ?? (weeklySig ? weeklySig[i] : null));
+
+  // 週次セクションの開始位置を示す縦の区切り線（price/MACD共通）
+  const dividerAnnotation = (weeklyStartIdx > 0) ? {
+    weeklyDivider: {
+      type: 'line', xMin: weeklyStartIdx - 1, xMax: weeklyStartIdx - 1,
+      borderColor: '#e6b800', borderWidth: 1.5, borderDash: [2, 2],
+      label: { display: true, content: '直近1ヶ月は週次', position: 'start',
+        backgroundColor: '#e6b800e0', color: '#000', font: { size: 9, weight: 700 },
+        padding: { x: 5, y: 2 }, borderRadius: 3, yAdjust: 14, rotation: 0 },
+    },
+  } : {};
+
   // Price
   const pCtx = document.getElementById('priceChart').getContext('2d');
   const grad = pCtx.createLinearGradient(0, 0, 0, 230);
   grad.addColorStop(0, 'rgba(88,166,255,.25)');
   grad.addColorStop(1, 'rgba(88,166,255,0)');
+  const priceDatasets = [{
+    label: '終値', data: mClose, borderColor: '#58a6ff',
+    backgroundColor: grad, borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1,
+  }];
+  if (weeklyClose) {
+    priceDatasets.push({
+      label: '終値(週次・早期)', data: weeklyClose, borderColor: '#d2a8ff',
+      backgroundColor: 'transparent', borderWidth: 2, borderDash: [6, 3],
+      pointRadius: 3, pointBackgroundColor: '#d2a8ff', fill: false, tension: 0.15,
+    });
+  }
   priceChart = new Chart(pCtx, {
     type: 'line',
-    data: { labels: dates, datasets: [{
-      label: '終値', data: close, borderColor: '#58a6ff',
-      backgroundColor: grad, borderWidth: 2, pointRadius: 0, fill: true, tension: 0.1,
-    }]},
+    data: { labels: mDates, datasets: priceDatasets },
     options: { ...BOPTS, plugins: { ...BOPTS.plugins,
       tooltip: { ...BOPTS.plugins.tooltip,
         callbacks: { label: ctx => ` ${s}${fmtPrice(ctx.raw, cur)}` }},
+      annotation: { annotations: dividerAnnotation },
       zoom: {
         zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },
@@ -1552,27 +1625,43 @@ function drawCharts(data) {
     }},
   });
 
+  const datasets = [
+    { type: 'bar',  label: 'ヒストグラム', data: mHist,
+      backgroundColor: mHist.map(v => (v ?? 0) >= 0 ? 'rgba(63,185,80,.75)' : 'rgba(248,81,73,.75)'), order: 3 },
+    { type: 'line', label: 'MACD',     data: mMacd,
+      borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.1, spanGaps: false, order: 1 },
+    { type: 'line', label: 'シグナル', data: mSignal,
+      borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.1, spanGaps: false, order: 0 },
+    { type: 'line', label: '', data: Array(mDates.length).fill(0),
+      borderColor: '#30363d', backgroundColor: 'transparent', borderWidth: 1,
+      borderDash: [4, 4], pointRadius: 0, order: 4 },
+  ];
+
+  if (weeklyMacd) {
+    datasets.push(
+      { type: 'bar',  label: 'ヒストグラム(週次・早期)', data: weeklyHist,
+        backgroundColor: weeklyHist.map(v => (v ?? 0) >= 0 ? 'rgba(165,214,167,.9)' : 'rgba(255,138,128,.9)'),
+        borderColor: '#e6b800', borderWidth: 1, order: 2 },
+      { type: 'line', label: 'MACD(週次・早期)', data: weeklyMacd,
+        borderColor: '#d2a8ff', backgroundColor: 'transparent', borderWidth: 2.5,
+        borderDash: [6, 3], pointRadius: 3, pointBackgroundColor: '#d2a8ff', tension: 0.15, spanGaps: false, order: 0.5 },
+      { type: 'line', label: 'シグナル(週次・早期)', data: weeklySig,
+        borderColor: '#ffd966', backgroundColor: 'transparent', borderWidth: 2.5,
+        borderDash: [6, 3], pointRadius: 3, pointBackgroundColor: '#ffd966', tension: 0.15, spanGaps: false, order: -0.5 },
+    );
+  }
+
   // MACD
   const mCtx = document.getElementById('macdChart').getContext('2d');
   macdChart = new Chart(mCtx, {
     type: 'bar',
-    data: { labels: dates, datasets: [
-      { type: 'bar',  label: 'ヒストグラム', data: histogram,
-        backgroundColor: histogram.map(v => (v ?? 0) >= 0 ? 'rgba(63,185,80,.75)' : 'rgba(248,81,73,.75)'), order: 3 },
-      { type: 'line', label: 'MACD',     data: macd,
-        borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.1, spanGaps: false, order: 1 },
-      { type: 'line', label: 'シグナル', data: signal,
-        borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.1, spanGaps: false, order: 0 },
-      { type: 'line', label: '', data: Array(dates.length).fill(0),
-        borderColor: '#30363d', backgroundColor: 'transparent', borderWidth: 1,
-        borderDash: [4, 4], pointRadius: 0, order: 4 },
-    ]},
+    data: { labels: mDates, datasets },
     options: { ...BOPTS, plugins: { ...BOPTS.plugins,
       legend: { ...BOPTS.plugins.legend, labels: { ...BOPTS.plugins.legend.labels,
         filter: item => item.text !== '' }},
       tooltip: { ...BOPTS.plugins.tooltip, callbacks: {
         label: ctx => ctx.dataset.label ? ` ${ctx.dataset.label}: ${Number(ctx.raw).toFixed(4)}` : null }},
-      annotation: { annotations: buildMacdAnnotations(dates, macd, signal) },
+      annotation: { annotations: { ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal), ...dividerAnnotation } },
       zoom: {
         zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },

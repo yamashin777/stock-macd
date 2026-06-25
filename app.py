@@ -979,11 +979,25 @@ def fetch_stock_data(ticker: str) -> dict:
     # 週次MACD（早期シグナル検知用）: 月足確定前に週足ベースでクロスの兆候を捉える
     w_close = raw['Close'].dropna()
     weekly_signal, weekly_signal_type, weekly_signal_date = '様子見', 'neutral', None
+    weekly_recent = None
     if len(w_close) >= 35:  # ウォームアップ(slow=26)に必要な最低本数
-        w_macd, w_sig, _ = calculate_macd(w_close)
+        w_macd, w_sig, w_hist_vals = calculate_macd(w_close)
         weekly_signal, weekly_signal_type = get_signal(w_macd, w_sig)
         w_idx = strip_tz(w_close.index)
         weekly_signal_date = w_idx[-1].strftime('%Y-%m-%d')
+
+        # 直近の月（最新の月足バケット）に該当する週次データを抜き出す
+        # → グラフ上で「最新月だけ」週次の細かい動きを色を変えて表示するために使う
+        last_month_start = strip_tz(hist.index)[-1]
+        mask = w_idx >= last_month_start
+        if mask.any():
+            weekly_recent = {
+                'dates':     w_idx[mask].strftime('%Y-%m-%d').tolist(),
+                'close':     [round(float(v), 2) for v in w_close[mask]],
+                'macd':      [None if pd.isna(v) else round(float(v), 6) for v in w_macd[mask]],
+                'signal':    [None if pd.isna(v) else round(float(v), 6) for v in w_sig[mask]],
+                'histogram': [None if pd.isna(v) else round(float(v), 6) for v in w_hist_vals[mask]],
+            }
 
     idx = strip_tz(hist.index)
     all_dates = idx.strftime('%Y-%m').tolist()
@@ -1071,6 +1085,7 @@ def fetch_stock_data(ticker: str) -> dict:
             'signal':    padded(sig),
             'histogram': padded(hist_vals),
         },
+        'weekly_recent': weekly_recent,
     }
 
 
