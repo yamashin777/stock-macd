@@ -1229,6 +1229,11 @@ function cardHTML(t, d, i) {
   const extUrl      = externalUrl(d.symbol, d.ticker);
   const sectorHtml  = d.sector ? `<div class="card-sector">${escapeHtml(d.sector)}</div>` : '';
   const earningsHtml = '';
+  let earlyBadgeHtml = '';
+  if (isEarlySignal(d)) {
+    const wcfg = sigCfg(d.weekly_signal);
+    earlyBadgeHtml = `<span class="early-mini-badge" title="週次MACDでは月足と逆方向の動き（${escapeHtml(d.weekly_signal)}）を検知">⚡週次:${wcfg.lbl}</span>`;
+  }
 
   return `<div class="card${act}${mktClass}${sigClass}" id="card-${t}" onclick="selectCard('${t}')">
     <div class="card-head">
@@ -1245,6 +1250,7 @@ function cardHTML(t, d, i) {
     <div class="card-price">${s}${fmtPrice(d.current_price, d.currency)}</div>
     <div class="card-change ${cc}">${sgn}${s}${fmtPrice(Math.abs(d.change), d.currency)} (${sgn}${d.change_pct.toFixed(2)}%)</div>
     <span class="badge ${cfg.cls}">${cfg.lbl}</span>
+    ${earlyBadgeHtml}
     ${earningsHtml}
     <div class="mini-svg">${mini}</div>
     ${memoHtml}
