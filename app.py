@@ -78,7 +78,7 @@ STOCK_NAMES = {
     'COST': 'Costco', 'ORCL': 'Oracle', 'CSCO': 'Cisco',
     'AMD': 'AMD', 'CRM': 'Salesforce', 'DIS': 'Disney', 'NFLX': 'Netflix',
 }
-SCAN_CACHE_TTL = 12 * 3600  # 12時間
+SCAN_CACHE_TTL = 24 * 3600  # 24時間（月足MACDは日次で大きく変わらないため）
 
 # ── 発掘スキャン対象 ─────────────────────────────────────────────────────────
 # 日本株追加分（日経225 + 主要TOPIX）SCAN_STOCKSにない銘柄
