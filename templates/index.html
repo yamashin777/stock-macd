@@ -1556,7 +1556,8 @@ function drawCharts(data) {
   const wr = data.weekly_recent;
   if (wr && wr.dates && wr.dates.length && dates.length) {
     const keptLen = dates.length - 1;  // 月足の最終バケットを週次に置き換える
-    mDates = dates.slice(0, keptLen).concat(wr.dates.map(d => d.slice(5)));  // "MM-DD"表示
+    // 週次ラベルも年月日をフル表示（間引き表示時に年が消えて時系列が分かりにくくなるのを防ぐ）
+    mDates = dates.slice(0, keptLen).concat(wr.dates);
     weeklyStartIdx = keptLen;
 
     mClose = close.slice(0, keptLen).concat(Array(wr.dates.length).fill(null));
