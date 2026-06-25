@@ -995,7 +995,14 @@ const SIG = {
 };
 const sigCfg = s => SIG[s] || { cls: 'sig-neutral', lbl: s };
 
-/** 週次MACDによる早期シグナル（月足確定前の兆候）を表示するHTMLを生成 */
+/** 週次MACDが「買い/売り」の実クロスを起こしており、かつ月足がまだ追いついていない場合のみ早期シグナルと判定 */
+function isEarlySignal(d) {
+  if (!d.weekly_signal_type) return false;
+  const isWeeklyCross = d.weekly_signal_type === 'buy' || d.weekly_signal_type === 'sell';
+  return isWeeklyCross && d.weekly_signal_type !== d.signal_type;
+}
+
+/** 週次MACDによる早期シグナル（月足の買い/売り確定前にクロスの兆候を検知）を表示するHTMLを生成 */
 function earlySignalHtml(data) {
   if (!data.weekly_signal || !data.weekly_signal_type) return '';
   const monthlyType = data.signal_type;
@@ -1003,12 +1010,13 @@ function earlySignalHtml(data) {
   const wcfg = sigCfg(data.weekly_signal);
   const dateStr = data.weekly_signal_date ? ` (${data.weekly_signal_date})` : '';
 
-  // 週足と月足のシグナルが一致していれば「確認済み」、異なれば「早期の兆候」として強調
-  const diverging = weeklyType !== monthlyType;
-  if (!diverging) {
-    return `<div style="margin-top:6px;font-size:11px;color:var(--muted)">
-      週次MACDも同方向（${escapeHtml(data.weekly_signal)}）— 月足シグナルと一致${dateStr}
-    </div>`;
+  // 早期シグナルとして扱うのは「週足が実際に買い/売りクロスを起こした」場合のみ。
+  // かつ月足がまだ同じシグナルに達していない（=月足確定前に検知できた）場合に限定する。
+  // 上昇/下降トレンドの単なる方向違いは対象外（誤検知が多いため）。
+  const isWeeklyCross = weeklyType === 'buy' || weeklyType === 'sell';
+  const alreadyConfirmed = weeklyType === monthlyType;
+  if (!isWeeklyCross || alreadyConfirmed) {
+    return '';
   }
   return `<div class="early-signal-box">
     <span class="early-signal-tag">⚡ 早期シグナル検知</span>
@@ -2126,9 +2134,9 @@ function renderScanView() {
       ? `<div class="scan-inline-chart">${sparklineSVG(d.chart_close, d.chart_macd_hist, 110, 40)}</div>`
       : '';
 
-    // 週次MACDによる早期シグナル（月足と方向が異なる場合のみ強調表示）
+    // 週次MACDによる早期シグナル（週足が実際に買い/売りクロスを起こし、月足が未確定の場合のみ）
     let earlyBadge = '';
-    if (d.weekly_signal_type && d.weekly_signal_type !== d.signal_type) {
+    if (isEarlySignal(d)) {
       const wcfg = sigCfg(d.weekly_signal);
       earlyBadge = `<span class="early-mini-badge" title="週次MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知">⚡ ${wcfg.lbl}</span>`;
     }
