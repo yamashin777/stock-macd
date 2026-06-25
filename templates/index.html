@@ -1515,7 +1515,9 @@ function resetZoom() {
 }
 
 // ── MACD signal annotation builder ────────────────────────────────────────
-function buildMacdAnnotations(dates, macd, signal) {
+// weeklyStartIdx: この index 以降のクロスは週足データによる検出のため、
+//                 月足クロス（緑/赤）とは別の配色（紫/金）で区別する
+function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1) {
   const ann = {};
   let n = 0;
   for (let i = 1; i < dates.length; i++) {
@@ -1524,21 +1526,25 @@ function buildMacdAnnotations(dates, macd, signal) {
     const dc = macd[i-1] >= signal[i-1] && macd[i] < signal[i];  // dead cross   → 売り
     if (!gc && !dc) continue;
 
-    const color = gc ? '#3fb950' : '#f85149';
-    const text  = gc ? '▲ 買い' : '▼ 売り';
+    // weeklyStartIdx以降（境界の橋渡し点を含む）は週足データに基づくクロス
+    const isWeekly = weeklyStartIdx >= 0 && i >= weeklyStartIdx;
+    const color = isWeekly
+      ? (gc ? '#d2a8ff' : '#ffd966')   // 週足: 買い=紫, 売り=金（週足ラインと同色）
+      : (gc ? '#3fb950' : '#f85149');  // 月足: 買い=緑, 売り=赤
+    const text  = (gc ? '▲ 買い' : '▼ 売り') + (isWeekly ? '(週)' : '');
 
     ann[`sig_${n++}`] = {
       type: 'line',
       xMin: i, xMax: i,                          // category index
       borderColor: color + '55',
       borderWidth: 1.5,
-      borderDash: [4, 3],
+      borderDash: isWeekly ? [2, 2] : [4, 3],
       label: {
         display: true,
         content: text,
         position: gc ? 'end' : 'start',          // 買い→上端, 売り→下端
         backgroundColor: color + 'e0',
-        color: '#fff',
+        color: isWeekly ? '#000' : '#fff',
         font: { size: 10, weight: 700 },
         padding: { x: 6, y: 3 },
         borderRadius: 4,
@@ -1681,7 +1687,7 @@ function drawCharts(data) {
         filter: item => item.text !== '' }},
       tooltip: { ...BOPTS.plugins.tooltip, callbacks: {
         label: ctx => ctx.dataset.label ? ` ${ctx.dataset.label}: ${Number(ctx.raw).toFixed(4)}` : null }},
-      annotation: { annotations: { ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal), ...dividerAnnotation } },
+      annotation: { annotations: { ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal, weeklyStartIdx), ...dividerAnnotation } },
       zoom: {
         zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },
