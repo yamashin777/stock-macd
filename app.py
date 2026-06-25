@@ -976,6 +976,15 @@ def fetch_stock_data(ticker: str) -> dict:
     macd, sig, hist_vals = calculate_macd(close)
     signal_text, signal_type = get_signal(macd, sig)
 
+    # 週次MACD（早期シグナル検知用）: 月足確定前に週足ベースでクロスの兆候を捉える
+    w_close = raw['Close'].dropna()
+    weekly_signal, weekly_signal_type, weekly_signal_date = '様子見', 'neutral', None
+    if len(w_close) >= 35:  # ウォームアップ(slow=26)に必要な最低本数
+        w_macd, w_sig, _ = calculate_macd(w_close)
+        weekly_signal, weekly_signal_type = get_signal(w_macd, w_sig)
+        w_idx = strip_tz(w_close.index)
+        weekly_signal_date = w_idx[-1].strftime('%Y-%m-%d')
+
     idx = strip_tz(hist.index)
     all_dates = idx.strftime('%Y-%m').tolist()
 
@@ -1051,6 +1060,9 @@ def fetch_stock_data(ticker: str) -> dict:
         'last_dc': last_dc,
         'sector': sector,
         'next_earnings': next_earnings,
+        'weekly_signal': weekly_signal,
+        'weekly_signal_type': weekly_signal_type,
+        'weekly_signal_date': weekly_signal_date,
         'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
         'chart': {
             'dates':     all_dates,

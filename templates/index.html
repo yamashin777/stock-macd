@@ -970,6 +970,28 @@ const SIG = {
 };
 const sigCfg = s => SIG[s] || { cls: 'sig-neutral', lbl: s };
 
+/** 週次MACDによる早期シグナル（月足確定前の兆候）を表示するHTMLを生成 */
+function earlySignalHtml(data) {
+  if (!data.weekly_signal || !data.weekly_signal_type) return '';
+  const monthlyType = data.signal_type;
+  const weeklyType  = data.weekly_signal_type;
+  const wcfg = sigCfg(data.weekly_signal);
+  const dateStr = data.weekly_signal_date ? ` (${data.weekly_signal_date})` : '';
+
+  // 週足と月足のシグナルが一致していれば「確認済み」、異なれば「早期の兆候」として強調
+  const diverging = weeklyType !== monthlyType;
+  if (!diverging) {
+    return `<div style="margin-top:6px;font-size:11px;color:var(--muted)">
+      週次MACDも同方向（${escapeHtml(data.weekly_signal)}）— 月足シグナルと一致${dateStr}
+    </div>`;
+  }
+  return `<div class="early-signal-box" style="margin-top:8px;padding:6px 10px;border-radius:8px;background:var(--bg3);border:1px solid var(--border)">
+    <span style="font-size:10px;color:var(--muted)">⚡ 早期シグナル（週次MACD・月足確定前の兆候）</span><br>
+    <span class="badge ${wcfg.cls}" style="font-size:11px;padding:3px 10px;margin-top:3px;display:inline-block">${wcfg.lbl}</span>
+    <span style="font-size:10px;color:var(--muted)">${dateStr}</span>
+  </div>`;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function escapeHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
@@ -1254,6 +1276,7 @@ function renderDetail(data) {
           <span class="badge ${cfg.cls}" style="font-size:13px;padding:5px 14px">${cfg.lbl}</span>
           ${data.sector ? `<span class="card-sector" style="margin-left:8px;vertical-align:middle">${escapeHtml(data.sector)}</span>` : ''}
         </div>
+        ${earlySignalHtml(data)}
       </div>
       <div class="detail-right">
         <div class="d-price">${s}${fmtPrice(data.current_price, data.currency)}</div>
