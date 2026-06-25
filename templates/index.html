@@ -995,29 +995,29 @@ const SIG = {
 };
 const sigCfg = s => SIG[s] || { cls: 'sig-neutral', lbl: s };
 
-/** 週次MACDが「買い/売り」の実クロスを起こしており、かつ月足がまだ追いついていない場合のみ早期シグナルと判定 */
+// シグナルタイプを方向（上向き=1 / 下向き=-1 / 中立=0）に変換
+// buyと bullish、sellとbearish は「同方向」としてまとめて扱う（誤検知防止）
+const SIGNAL_DIR = { buy: 1, bullish: 1, sell: -1, bearish: -1, neutral: 0 };
+
+/**
+ * 早期シグナル判定: 月足の方向と週足の方向が「逆」の場合に検知する。
+ * 例: 月足がまだ上昇方向（買い/上昇トレンド）なのに、週足はもう下降方向
+ *     （売り/下降トレンド）に転じている → 月足が確定する前の早期警告。
+ * 月足と週足が同方向（buy×bullishなど）の場合は誤検知防止のため対象外。
+ */
 function isEarlySignal(d) {
-  if (!d.weekly_signal_type) return false;
-  const isWeeklyCross = d.weekly_signal_type === 'buy' || d.weekly_signal_type === 'sell';
-  return isWeeklyCross && d.weekly_signal_type !== d.signal_type;
+  if (!d.weekly_signal_type || !d.signal_type) return false;
+  const wDir = SIGNAL_DIR[d.weekly_signal_type] ?? 0;
+  const mDir = SIGNAL_DIR[d.signal_type] ?? 0;
+  if (wDir === 0) return false;          // 週足が様子見なら早期シグナルなし
+  return wDir !== mDir;                  // 方向が食い違っていれば早期シグナル
 }
 
-/** 週次MACDによる早期シグナル（月足の買い/売り確定前にクロスの兆候を検知）を表示するHTMLを生成 */
+/** 週次MACDによる早期シグナル（月足の買い/売り確定前に方向の食い違いを検知）を表示するHTMLを生成 */
 function earlySignalHtml(data) {
-  if (!data.weekly_signal || !data.weekly_signal_type) return '';
-  const monthlyType = data.signal_type;
-  const weeklyType  = data.weekly_signal_type;
+  if (!isEarlySignal(data)) return '';
   const wcfg = sigCfg(data.weekly_signal);
   const dateStr = data.weekly_signal_date ? ` (${data.weekly_signal_date})` : '';
-
-  // 早期シグナルとして扱うのは「週足が実際に買い/売りクロスを起こした」場合のみ。
-  // かつ月足がまだ同じシグナルに達していない（=月足確定前に検知できた）場合に限定する。
-  // 上昇/下降トレンドの単なる方向違いは対象外（誤検知が多いため）。
-  const isWeeklyCross = weeklyType === 'buy' || weeklyType === 'sell';
-  const alreadyConfirmed = weeklyType === monthlyType;
-  if (!isWeeklyCross || alreadyConfirmed) {
-    return '';
-  }
   return `<div class="early-signal-box">
     <span class="early-signal-tag">⚡ 早期シグナル検知</span>
     <span style="font-size:11px;color:#fff;opacity:.9">月足確定前に週次MACDで動きを検知しました</span><br>
