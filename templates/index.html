@@ -2589,7 +2589,7 @@ function _renderDiscResults(data) {
     const secStr = d.sector
       ? `<span style="font-size:10px;background:var(--border);color:var(--fg);padding:1px 6px;border-radius:10px;white-space:nowrap">${escapeHtml(d.sector)}</span>` : '';
     let earlyBadge = '';
-    if (d.weekly_signal_type && d.weekly_signal_type !== d.signal_type) {
+    if (isEarlySignal(d)) {
       const wcfg = sigCfg(d.weekly_signal);
       earlyBadge = `<span class="early-mini-badge" title="週次MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知">⚡ ${wcfg.lbl}</span>`;
     }
