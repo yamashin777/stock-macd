@@ -1021,7 +1021,7 @@ function earlySignalHtml(data) {
   return `<div class="early-signal-box">
     <span class="early-signal-tag">⚡ 早期シグナル検知</span>
     <span style="font-size:11px;color:#fff;opacity:.9">月足確定前に週次MACDで動きを検知しました</span><br>
-    <span class="badge ${wcfg.cls}" style="font-size:12px;padding:4px 12px;margin-top:5px;display:inline-block">${wcfg.lbl}</span>
+    <span class="badge ${wcfg.cls}" style="font-size:12px;padding:4px 12px;margin-top:5px;display:inline-block">週次: ${wcfg.lbl}</span>
     <span style="font-size:10px;color:#fff;opacity:.75">${dateStr}</span>
   </div>`;
 }
@@ -2138,7 +2138,7 @@ function renderScanView() {
     let earlyBadge = '';
     if (isEarlySignal(d)) {
       const wcfg = sigCfg(d.weekly_signal);
-      earlyBadge = `<span class="early-mini-badge" title="週次MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知">⚡ ${wcfg.lbl}</span>`;
+      earlyBadge = `<span class="early-mini-badge" title="週次MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知">⚡週次:${wcfg.lbl}</span>`;
     }
 
     // 次回決算日までの日数
@@ -2591,7 +2591,7 @@ function _renderDiscResults(data) {
     let earlyBadge = '';
     if (isEarlySignal(d)) {
       const wcfg = sigCfg(d.weekly_signal);
-      earlyBadge = `<span class="early-mini-badge" title="週次MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知">⚡ ${wcfg.lbl}</span>`;
+      earlyBadge = `<span class="early-mini-badge" title="週次MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知">⚡週次:${wcfg.lbl}</span>`;
     }
     return `<div class="disc-row">
       <div style="flex:1 1 130px">
