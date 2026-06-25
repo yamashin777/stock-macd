@@ -894,7 +894,7 @@ def scan_stock_data(ticker: str) -> dict:
         elif pm >= ps and cm < cs:
             last_dc = common[i].strftime('%Y-%m')
 
-    # 週次MACD（早期シグナル検知用）: 月足確定前に週足ベースでクロスの兆候を捉える
+    # 週足MACD（早期シグナル検知用）: 月足確定前に週足ベースでクロスの兆候を捉える
     w_close = raw['Close'].dropna()
     weekly_signal, weekly_signal_type, weekly_signal_date = '様子見', 'neutral', None
     if len(w_close) >= 35:
@@ -987,7 +987,7 @@ def fetch_stock_data(ticker: str) -> dict:
     macd, sig, hist_vals = calculate_macd(close)
     signal_text, signal_type = get_signal(macd, sig)
 
-    # 週次MACD（早期シグナル検知用）: 月足確定前に週足ベースでクロスの兆候を捉える
+    # 週足MACD（早期シグナル検知用）: 月足確定前に週足ベースでクロスの兆候を捉える
     w_close = raw['Close'].dropna()
     weekly_signal, weekly_signal_type, weekly_signal_date = '様子見', 'neutral', None
     weekly_recent = None
@@ -997,8 +997,8 @@ def fetch_stock_data(ticker: str) -> dict:
         w_idx = strip_tz(w_close.index)
         weekly_signal_date = w_idx[-1].strftime('%Y-%m-%d')
 
-        # 直近の月（最新の月足バケット）に該当する週次データを抜き出す
-        # → グラフ上で「最新月だけ」週次の細かい動きを色を変えて表示するために使う
+        # 直近の月（最新の月足バケット）に該当する週足データを抜き出す
+        # → グラフ上で「最新月だけ」週足の細かい動きを色を変えて表示するために使う
         last_month_start = strip_tz(hist.index)[-1]
         mask = w_idx >= last_month_start
         if mask.any():
