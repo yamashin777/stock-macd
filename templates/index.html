@@ -342,6 +342,11 @@ header {
 
 /* ── メモ & 編集 ─────────────────────────────── */
 .card-earnings { font-size:10px; color:var(--accent); margin-top:3px; }
+.early-mini-badge {
+  display: inline-block; font-size: 9px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #8a2387, #e94057, #f27121);
+  padding: 2px 7px; border-radius: 8px; margin-top: 3px;
+}
 .early-signal-box {
   margin-top: 8px; padding: 8px 12px; border-radius: 10px;
   background: linear-gradient(135deg, #8a2387, #e94057, #f27121);
@@ -2121,6 +2126,13 @@ function renderScanView() {
       ? `<div class="scan-inline-chart">${sparklineSVG(d.chart_close, d.chart_macd_hist, 110, 40)}</div>`
       : '';
 
+    // 週次MACDによる早期シグナル（月足と方向が異なる場合のみ強調表示）
+    let earlyBadge = '';
+    if (d.weekly_signal_type && d.weekly_signal_type !== d.signal_type) {
+      const wcfg = sigCfg(d.weekly_signal);
+      earlyBadge = `<span class="early-mini-badge" title="週次MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知">⚡ ${wcfg.lbl}</span>`;
+    }
+
     // 次回決算日までの日数
     let earnCell = '<span style="color:var(--muted)">—</span>';
     if (d.next_earnings) {
@@ -2148,6 +2160,7 @@ function renderScanView() {
               <span class="badge ${cfg.cls} scan-sig-badge scan-badge-desk" onclick="setScanSort('signal')" title="シグナルでソート" style="font-size:9px;padding:1px 5px;margin-left:4px">${cfg.lbl}</span>
             </div>
             ${secChip}
+            ${earlyBadge}
             ${memoEl}
           </div>
           ${chart}
@@ -2567,11 +2580,17 @@ function _renderDiscResults(data) {
       ? `<span style="font-size:10px;color:var(--muted)">GC: ${d.last_gc}</span>` : '';
     const secStr = d.sector
       ? `<span style="font-size:10px;background:var(--border);color:var(--fg);padding:1px 6px;border-radius:10px;white-space:nowrap">${escapeHtml(d.sector)}</span>` : '';
+    let earlyBadge = '';
+    if (d.weekly_signal_type && d.weekly_signal_type !== d.signal_type) {
+      const wcfg = sigCfg(d.weekly_signal);
+      earlyBadge = `<span class="early-mini-badge" title="週次MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知">⚡ ${wcfg.lbl}</span>`;
+    }
     return `<div class="disc-row">
       <div style="flex:1 1 130px">
         <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
           <span class="badge ${cfg.cls}" style="font-size:9px;padding:1px 5px">${cfg.lbl}</span>
           ${secStr}
+          ${earlyBadge}
           <span class="disc-name">${escapeHtml(d.name || d.ticker)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:2px">

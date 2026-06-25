@@ -894,6 +894,14 @@ def scan_stock_data(ticker: str) -> dict:
         elif pm >= ps and cm < cs:
             last_dc = common[i].strftime('%Y-%m')
 
+    # 週次MACD（早期シグナル検知用）: 月足確定前に週足ベースでクロスの兆候を捉える
+    w_close = raw['Close'].dropna()
+    weekly_signal, weekly_signal_type, weekly_signal_date = '様子見', 'neutral', None
+    if len(w_close) >= 35:
+        w_macd, w_sig, _ = calculate_macd(w_close)
+        weekly_signal, weekly_signal_type = get_signal(w_macd, w_sig)
+        weekly_signal_date = strip_tz(w_close.index)[-1].strftime('%Y-%m-%d')
+
     def _lv(s):
         d = s.dropna()
         return round(float(d.iloc[-1]), 4) if not d.empty else 0.0
@@ -924,6 +932,9 @@ def scan_stock_data(ticker: str) -> dict:
         'chart_close':     chart_close,
         'chart_macd_hist': chart_macd_hist,
         'next_earnings':   None,
+        'weekly_signal':      weekly_signal,
+        'weekly_signal_type': weekly_signal_type,
+        'weekly_signal_date': weekly_signal_date,
     }
 
 
