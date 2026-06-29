@@ -1574,33 +1574,34 @@ function drawCharts(data) {
   const { dates, close, macd, signal, histogram } = getSlice(data.chart, currentPeriod);
   const s = sym(data.currency), cur = data.currency;
 
-  // 直近1ヶ月分を週足データに置き換える（月足確定前の早期の動きを色を変えて表示）
+  // 直近1ヶ月分の週足データを「月足の本当の最終点」の後ろに追加する
+  // （月足の最終点＝現在のシグナルバッジが使っている値。これを欠落させない）
   // ※ price/MACD両チャートで同じラベル配列を使う必要がある（ズーム同期のため）
   let mDates = dates, mClose = close, mHist = histogram, mMacd = macd, mSignal = signal;
   let weeklyClose = null, weeklyHist = null, weeklyMacd = null, weeklySig = null, weeklyStartIdx = -1;
   const wr = data.weekly_recent;
   if (wr && wr.dates && wr.dates.length && dates.length) {
-    const keptLen = dates.length - 1;  // 月足の最終バケットを週足に置き換える
+    const baseLen = dates.length;  // 月足は全て残す（最終点も含む）
     // 週足ラベルも年月日をフル表示（間引き表示時に年が消えて時系列が分かりにくくなるのを防ぐ）
-    mDates = dates.slice(0, keptLen).concat(wr.dates);
-    weeklyStartIdx = keptLen;
+    mDates = dates.concat(wr.dates);
+    weeklyStartIdx = baseLen;
 
-    mClose = close.slice(0, keptLen).concat(Array(wr.dates.length).fill(null));
-    weeklyClose = Array(Math.max(0, keptLen - 1)).fill(null)
-      .concat([close[keptLen - 1]])
+    mClose = close.concat(Array(wr.dates.length).fill(null));
+    weeklyClose = Array(Math.max(0, baseLen - 1)).fill(null)
+      .concat([close[baseLen - 1]])
       .concat(wr.close);
 
-    mHist = histogram.slice(0, keptLen).concat(Array(wr.dates.length).fill(null));
-    weeklyHist = Array(keptLen).fill(null).concat(wr.histogram);
+    mHist = histogram.concat(Array(wr.dates.length).fill(null));
+    weeklyHist = Array(baseLen).fill(null).concat(wr.histogram);
 
-    mMacd = macd.slice(0, keptLen).concat(Array(wr.dates.length).fill(null));
-    weeklyMacd = Array(Math.max(0, keptLen - 1)).fill(null)
-      .concat([macd[keptLen - 1]])   // 接続点（月足の最後の値を週足線の起点にする）
+    mMacd = macd.concat(Array(wr.dates.length).fill(null));
+    weeklyMacd = Array(Math.max(0, baseLen - 1)).fill(null)
+      .concat([macd[baseLen - 1]])   // 接続点（月足の本当の最終値＝バッジと同じ値）
       .concat(wr.macd);
 
-    mSignal = signal.slice(0, keptLen).concat(Array(wr.dates.length).fill(null));
-    weeklySig = Array(Math.max(0, keptLen - 1)).fill(null)
-      .concat([signal[keptLen - 1]])
+    mSignal = signal.concat(Array(wr.dates.length).fill(null));
+    weeklySig = Array(Math.max(0, baseLen - 1)).fill(null)
+      .concat([signal[baseLen - 1]])
       .concat(wr.signal);
   }
   // クロス注釈用: 月足/週足のどちらかの値を採用したマージ系列
