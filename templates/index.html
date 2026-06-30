@@ -1602,11 +1602,58 @@ function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimate
 }
 
 // ── Chart.js ───────────────────────────────────────────────────────────────
+// Chart.js凡例ラベルのホバー説明文
+const LEGEND_TIPS = {
+  '終値':                 '月足の確定した終値です。',
+  '終値(週足・早期)':     '直近1ヶ月分のみ、週単位の終値を表示。月足が確定する前の値動きを先取りして見られます。',
+  '終値(次月推定)':       '現在の株価が来月まで変わらなかったと仮定した参考値です。',
+  'MACD':                 '月足の確定したMACD線（短期EMA−長期EMA）です。',
+  'シグナル':             '月足の確定したシグナル線（MACDの移動平均）です。',
+  'ヒストグラム':         '月足のMACD線とシグナル線の差。プラスは買い優勢、マイナスは売り優勢を示します。',
+  'MACD(週足・早期)':     '直近1ヶ月分のみ、週単位で計算したMACD線。月足確定前の早期シグナル検知用の参考値です。',
+  'シグナル(週足・早期)': '直近1ヶ月分のみ、週単位で計算したシグナル線。月足確定前の早期シグナル検知用の参考値です。',
+  'ヒストグラム(週足・早期)': '週単位で計算したMACDとシグナルの差。月足が確定する前の参考値です。',
+  'MACD(次月推定)':       '現在の株価が来月まで変わらなかったと仮定して計算したMACD線の参考値です。',
+  'シグナル(次月推定)':   '現在の株価が来月まで変わらなかったと仮定して計算したシグナル線の参考値です。',
+};
+
+function _getLegendTipEl() {
+  let el = document.getElementById('legend-hover-tip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'legend-hover-tip';
+    el.style.cssText = 'position:fixed;z-index:9999;background:#1c2128;color:#e6edf3;'
+      + 'border:1px solid #30363d;border-radius:6px;padding:8px 10px;font-size:11px;'
+      + 'line-height:1.5;max-width:240px;pointer-events:none;display:none;'
+      + 'box-shadow:0 4px 12px rgba(0,0,0,.4)';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function _legendOnHover(evt, legendItem) {
+  const tip = LEGEND_TIPS[legendItem.text];
+  if (!tip) return;
+  const el = _getLegendTipEl();
+  el.textContent = tip;
+  el.style.display = 'block';
+  const x = evt.native ? evt.native.clientX : evt.x;
+  const y = evt.native ? evt.native.clientY : evt.y;
+  el.style.left = (x + 12) + 'px';
+  el.style.top  = (y + 16) + 'px';
+}
+
+function _legendOnLeave() {
+  const el = document.getElementById('legend-hover-tip');
+  if (el) el.style.display = 'none';
+}
+
 const BOPTS = {
   responsive: true, maintainAspectRatio: false, animation: false,
   interaction: { mode: 'index', intersect: false },
   plugins: {
-    legend: { labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 }, padding: 14 } },
+    legend: { labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 }, padding: 14 },
+              onHover: _legendOnHover, onLeave: _legendOnLeave },
     tooltip: { backgroundColor: '#1c2128', borderColor: '#30363d', borderWidth: 1,
                titleColor: '#e6edf3', bodyColor: '#8b949e', padding: 10 },
   },
