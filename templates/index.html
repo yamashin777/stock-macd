@@ -271,6 +271,11 @@ header {
   border-radius: 8px; padding: 13px 15px; margin-bottom: 10px;
 }
 .chart-lbl { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 9px; }
+.chart-legend { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin:8px 0 4px; }
+.legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); }
+.legend-swatch { display:inline-block; width:14px; height:3px; border-radius:2px; }
+.legend-swatch.legend-dash { background:transparent; height:0; border-top:2px dashed; width:14px; }
+.legend-swatch.legend-dot { background:transparent; height:0; border-top:2px dotted; width:14px; }
 .ch-price { height: 230px; position: relative; }
 .ch-macd  { height: 165px; position: relative; }
 
@@ -1350,10 +1355,11 @@ function renderDetail(data) {
       ${(() => {
         if (data.next_month_signal_type == null) return '';
         const nmCfg = sigCfg(data.next_month_signal);
+        const baseDate = data.updated_at ? data.updated_at.slice(0, 10) : '';
         return `<div class="stat" title="現在値のまま株価が変わらなかった場合の参考値（実際の値動き次第で変わります）">
           <div class="stat-lbl">次月推定 (${escapeHtml(data.next_month_label || '')})</div>
           <div class="stat-val"><span class="badge ${nmCfg.cls}" style="font-size:10px;padding:2px 8px">${nmCfg.lbl}</span></div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">※現在値で据え置きと仮定した参考値</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">※${escapeHtml(baseDate)}時点の株価 ${sym(data.currency)}${fmtPrice(data.current_price, data.currency)} で据え置きと仮定</div>
         </div>`;
       })()}
     </div>
@@ -1392,6 +1398,12 @@ function renderDetail(data) {
       <button class="pbtn" data-m="120" onclick="applyPeriod(120)">10年</button>
       <button class="pbtn" onclick="resetZoom()" title="ズームをリセット">↺ リセット</button>
       <span style="margin-left:auto;font-size:10px;color:var(--muted);white-space:nowrap">ホイール: ズーム　ドラッグ: パン</span>
+    </div>
+
+    <div class="chart-legend">
+      <span class="legend-item"><span class="legend-swatch" style="background:#3fb950"></span>月足（確定）</span>
+      <span class="legend-item"><span class="legend-swatch legend-dash" style="border-color:#d2a8ff"></span>週足（早期シグナル）</span>
+      <span class="legend-item"><span class="legend-swatch legend-dot" style="border-color:#8b949e"></span>次月推定（仮定ベースの参考値）</span>
     </div>
 
     <div class="chart-box">
