@@ -1341,7 +1341,8 @@ def ai_comment():
     # キャッシュ確認（force=trueの場合はスキップ）
     cached = _ai_cache.get(ticker)
     if cached and not force and time.time() - cached['ts'] < _AI_CACHE_TTL:
-        return jsonify({'comment': cached['text'], 'cached': True, 'prompt_used': prompt})
+        return jsonify({'comment': cached['text'], 'cached': True, 'prompt_used': prompt,
+                         'fetched_at': datetime.fromtimestamp(cached['ts']).strftime('%Y-%m-%d %H:%M')})
 
     # 利用可能なモデルを順番に試す（404なら次のモデルへ）
     _GEMINI_MODELS = [
@@ -1372,9 +1373,11 @@ def ai_comment():
             finish = candidate.get('finishReason', '')
             if finish == 'MAX_TOKENS':
                 print(f'[ai] {ticker} MAX_TOKENS hit (model={model})')
-            _ai_cache[ticker] = {'text': text, 'ts': time.time()}
+            now_ts = time.time()
+            _ai_cache[ticker] = {'text': text, 'ts': now_ts}
             _save_ai_comments(_ai_cache)
-            return jsonify({'comment': text, 'finish_reason': finish, 'prompt_used': prompt})
+            return jsonify({'comment': text, 'finish_reason': finish, 'prompt_used': prompt,
+                             'fetched_at': datetime.fromtimestamp(now_ts).strftime('%Y-%m-%d %H:%M')})
         elif resp.status_code in (404, 429, 503):
             # 404=モデル未対応 / 429=制限 / 503=高負荷 → 次のモデルを試す
             last_err = f'モデル {model}: HTTP {resp.status_code}'
@@ -1386,7 +1389,8 @@ def ai_comment():
     # 全モデルが失敗 → キャッシュが古くても返す（制限中の保険）
     stale = _ai_cache.get(ticker)
     if stale:
-        return jsonify({'comment': stale['text'], 'cached': True, 'stale': True})
+        return jsonify({'comment': stale['text'], 'cached': True, 'stale': True,
+                         'fetched_at': datetime.fromtimestamp(stale['ts']).strftime('%Y-%m-%d %H:%M')})
     return jsonify({'error': 'rate_limit', 'message': 'APIの利用制限に達しました。しばらく時間をおいてから再試行してください。'}), 429
 
 
