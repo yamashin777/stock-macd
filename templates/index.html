@@ -272,10 +272,23 @@ header {
 }
 .chart-lbl { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 9px; }
 .chart-legend { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin:8px 0 4px; }
-.legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); }
+.legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted);
+  position:relative; cursor:help; border-bottom:1px dotted var(--muted); padding-bottom:1px; }
 .legend-swatch { display:inline-block; width:14px; height:3px; border-radius:2px; }
 .legend-swatch.legend-dash { background:transparent; height:0; border-top:2px dashed; width:14px; }
 .legend-swatch.legend-dot { background:transparent; height:0; border-top:2px dotted; width:14px; }
+.legend-item::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 8px); left: 0;
+  background: #1c2128; color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; font-size: 11px; line-height: 1.5;
+  white-space: normal; width: 240px;
+  opacity: 0; visibility: hidden; transform: translateY(4px);
+  transition: opacity .15s, transform .15s;
+  z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,.4);
+  pointer-events: none;
+}
+.legend-item:hover::after { opacity: 1; visibility: visible; transform: translateY(0); }
 .ch-price { height: 230px; position: relative; }
 .ch-macd  { height: 165px; position: relative; }
 
@@ -1401,11 +1414,11 @@ function renderDetail(data) {
     </div>
 
     <div class="chart-legend">
-      <span class="legend-item" title="毎月の確定した終値・MACDを使用。買い(GC)は緑、売り(DC)は赤で表示されます。">
+      <span class="legend-item" data-tip="毎月の確定した終値・MACDを使用。買い(GC)は緑、売り(DC)は赤で表示されます。">
         <span class="legend-swatch" style="background:#3fb950"></span>月足（確定）</span>
-      <span class="legend-item" title="直近1ヶ月分のみ、週単位のMACDで計算した参考値。月足が確定する前に、週足ベースで先行する変化の兆候を示します。買いは紫、売りは金色。">
+      <span class="legend-item" data-tip="直近1ヶ月分のみ、週単位のMACDで計算した参考値。月足が確定する前に、週足ベースで先行する変化の兆候を示します。買いは紫、売りは金色。">
         <span class="legend-swatch legend-dash" style="border-color:#d2a8ff"></span>週足（早期シグナル）</span>
-      <span class="legend-item" title="現在の株価が来月まで変わらなかったと仮定して計算した参考値です。実際の値動き次第で結果は変わります。あくまで「今のまま動かなければこうなる」という目安です。">
+      <span class="legend-item" data-tip="現在の株価が来月まで変わらなかったと仮定して計算した参考値です。実際の値動き次第で結果は変わります。あくまで「今のまま動かなければこうなる」という目安です。">
         <span class="legend-swatch legend-dot" style="border-color:#8b949e"></span>次月推定（仮定ベースの参考値）</span>
     </div>
 
