@@ -1347,6 +1347,15 @@ function renderDetail(data) {
         return `<div class="stat"><div class="stat-lbl">次回決算</div>
           <div class="stat-val"><span class="${cls}">${label}</span> <span style="font-size:11px;color:var(--muted)">${escapeHtml(data.next_earnings.slice(5))}</span></div></div>`;
       })()}
+      ${(() => {
+        if (data.next_month_signal_type == null) return '';
+        const nmCfg = sigCfg(data.next_month_signal);
+        return `<div class="stat" title="現在値のまま株価が変わらなかった場合の参考値（実際の値動き次第で変わります）">
+          <div class="stat-lbl">次月推定 (${escapeHtml(data.next_month_label || '')})</div>
+          <div class="stat-val"><span class="badge ${nmCfg.cls}" style="font-size:10px;padding:2px 8px">${nmCfg.lbl}</span></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">※現在値で据え置きと仮定した参考値</div>
+        </div>`;
+      })()}
     </div>
 
     <div class="ai-section" id="ai-section">

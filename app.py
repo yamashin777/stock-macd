@@ -987,6 +987,24 @@ def fetch_stock_data(ticker: str) -> dict:
     macd, sig, hist_vals = calculate_macd(close)
     signal_text, signal_type = get_signal(macd, sig)
 
+    # 次月の推定MACD: 「株価が現在値のまま変わらなかった場合」の仮定で
+    # 来月分のダミー月を1つ追加してMACDを再計算する（あくまで参考値）
+    next_month_label = None
+    next_month_macd = next_month_sig = next_month_hist = None
+    next_month_signal_text = next_month_signal_type = None
+    try:
+        last_month_dt = strip_tz(hist.index)[-1]
+        next_month_dt = (last_month_dt + pd.DateOffset(months=1)).replace(day=1)
+        next_month_label = next_month_dt.strftime('%Y-%m')
+        ext_close = pd.concat([close, pd.Series([current_price], index=[next_month_dt])])
+        ext_macd, ext_sig, ext_hist = calculate_macd(ext_close)
+        next_month_macd = round(float(ext_macd.iloc[-1]), 6)
+        next_month_sig  = round(float(ext_sig.iloc[-1]), 6)
+        next_month_hist = round(float(ext_hist.iloc[-1]), 6)
+        next_month_signal_text, next_month_signal_type = get_signal(ext_macd, ext_sig)
+    except Exception:
+        pass
+
     # 週足MACD（早期シグナル検知用）: 月足確定前に週足ベースでクロスの兆候を捉える
     w_close = raw['Close'].dropna()
     weekly_signal, weekly_signal_type, weekly_signal_date = '様子見', 'neutral', None
@@ -1088,6 +1106,12 @@ def fetch_stock_data(ticker: str) -> dict:
         'weekly_signal': weekly_signal,
         'weekly_signal_type': weekly_signal_type,
         'weekly_signal_date': weekly_signal_date,
+        'next_month_label':       next_month_label,
+        'next_month_macd':        next_month_macd,
+        'next_month_signal_val':  next_month_sig,
+        'next_month_histogram':   next_month_hist,
+        'next_month_signal':      next_month_signal_text,
+        'next_month_signal_type': next_month_signal_type,
         'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
         'chart': {
             'dates':     all_dates,
