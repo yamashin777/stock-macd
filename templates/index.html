@@ -1529,7 +1529,9 @@ function resetZoom() {
 // ── MACD signal annotation builder ────────────────────────────────────────
 // weeklyStartIdx: この index 以降のクロスは週足データによる検出のため、
 //                 月足クロス（緑/赤）とは別の配色（紫/金）で区別する
-function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1) {
+// estimateStartIdx: この index 以降は次月推定（仮定ベース）のクロスのため、
+//                    グレーで区別する
+function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimateStartIdx = -1) {
   const ann = {};
   let n = 0;
   for (let i = 1; i < dates.length; i++) {
@@ -1538,25 +1540,29 @@ function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1) {
     const dc = macd[i-1] >= signal[i-1] && macd[i] < signal[i];  // dead cross   → 売り
     if (!gc && !dc) continue;
 
+    const isEstimate = estimateStartIdx >= 0 && i >= estimateStartIdx;
     // weeklyStartIdx以降（境界の橋渡し点を含む）は週足データに基づくクロス
-    const isWeekly = weeklyStartIdx >= 0 && i >= weeklyStartIdx;
-    const color = isWeekly
+    const isWeekly = !isEstimate && weeklyStartIdx >= 0 && i >= weeklyStartIdx;
+    const color = isEstimate
+      ? (gc ? '#9aa3ad' : '#8b949e')   // 次月推定: グレー（仮定ベースであることを示す）
+      : isWeekly
       ? (gc ? '#d2a8ff' : '#ffd966')   // 週足: 買い=紫, 売り=金（週足ラインと同色）
       : (gc ? '#3fb950' : '#f85149');  // 月足: 買い=緑, 売り=赤
-    const text  = (gc ? '▲ 買い' : '▼ 売り') + (isWeekly ? '(週)' : '');
+    const suffix = isEstimate ? '(推定)' : isWeekly ? '(週)' : '';
+    const text  = (gc ? '▲ 買い' : '▼ 売り') + suffix;
 
     ann[`sig_${n++}`] = {
       type: 'line',
       xMin: i, xMax: i,                          // category index
       borderColor: color + '55',
       borderWidth: 1.5,
-      borderDash: isWeekly ? [2, 2] : [4, 3],
+      borderDash: isEstimate ? [1, 3] : isWeekly ? [2, 2] : [4, 3],
       label: {
         display: true,
         content: text,
         position: gc ? 'end' : 'start',          // 買い→上端, 売り→下端
         backgroundColor: color + 'e0',
-        color: isWeekly ? '#000' : '#fff',
+        color: (isWeekly || isEstimate) ? '#000' : '#fff',
         font: { size: 10, weight: 700 },
         padding: { x: 6, y: 3 },
         borderRadius: 4,
@@ -1616,9 +1622,33 @@ function drawCharts(data) {
       .concat([signal[baseLen - 1]])
       .concat(wr.signal);
   }
-  // クロス注釈用: 月足/週足のどちらかの値を採用したマージ系列
-  const mergedMacd   = mMacd.map((v, i) => v ?? (weeklyMacd ? weeklyMacd[i] : null));
-  const mergedSignal = mSignal.map((v, i) => v ?? (weeklySig ? weeklySig[i] : null));
+
+  // 次月推定（現在値で据え置きと仮定した参考値）を末尾にもう1点追加
+  let estimateClose = null, estimateMacd = null, estimateSig = null, estimateStartIdx = -1;
+  if (data.next_month_label && data.next_month_macd != null) {
+    const beforeLen = mDates.length;
+    estimateStartIdx = beforeLen;
+    mDates = mDates.concat([data.next_month_label + '(推定)']);
+    mClose = mClose.concat([null]);
+    mHist  = mHist.concat([null]);
+    mMacd  = mMacd.concat([null]);
+    mSignal = mSignal.concat([null]);
+    if (weeklyClose) weeklyClose = weeklyClose.concat([null]);
+    if (weeklyHist)  weeklyHist  = weeklyHist.concat([null]);
+    if (weeklyMacd)  weeklyMacd  = weeklyMacd.concat([null]);
+    if (weeklySig)   weeklySig   = weeklySig.concat([null]);
+
+    const bridgeClose = weeklyClose ? weeklyClose[beforeLen - 1] : mClose[beforeLen - 1];
+    const bridgeMacd   = weeklyMacd ? weeklyMacd[beforeLen - 1] : mMacd[beforeLen - 1];
+    const bridgeSig     = weeklySig  ? weeklySig[beforeLen - 1]  : mSignal[beforeLen - 1];
+    estimateClose = Array(Math.max(0, beforeLen - 1)).fill(null).concat([bridgeClose, data.current_price]);
+    estimateMacd  = Array(Math.max(0, beforeLen - 1)).fill(null).concat([bridgeMacd, data.next_month_macd]);
+    estimateSig   = Array(Math.max(0, beforeLen - 1)).fill(null).concat([bridgeSig, data.next_month_signal_val]);
+  }
+
+  // クロス注釈用: 月足/週足/次月推定のいずれかの値を採用したマージ系列
+  const mergedMacd   = mMacd.map((v, i) => v ?? (weeklyMacd ? weeklyMacd[i] : null) ?? (estimateMacd ? estimateMacd[i] : null));
+  const mergedSignal = mSignal.map((v, i) => v ?? (weeklySig ? weeklySig[i] : null) ?? (estimateSig ? estimateSig[i] : null));
 
   // 週足セクションの開始位置を示す縦の区切り線（price/MACD共通）
   const dividerAnnotation = (weeklyStartIdx > 0) ? {
@@ -1630,6 +1660,15 @@ function drawCharts(data) {
         padding: { x: 5, y: 2 }, borderRadius: 3, yAdjust: 14, rotation: 0 },
     },
   } : {};
+  if (estimateStartIdx > 0) {
+    dividerAnnotation.estimateDivider = {
+      type: 'line', xMin: estimateStartIdx - 1, xMax: estimateStartIdx - 1,
+      borderColor: '#8b949e', borderWidth: 1.5, borderDash: [1, 3],
+      label: { display: true, content: '次月は推定値', position: 'end',
+        backgroundColor: '#8b949ee0', color: '#000', font: { size: 9, weight: 700 },
+        padding: { x: 5, y: 2 }, borderRadius: 3, yAdjust: -14, rotation: 0 },
+    };
+  }
 
   // Price
   const pCtx = document.getElementById('priceChart').getContext('2d');
@@ -1645,6 +1684,14 @@ function drawCharts(data) {
       label: '終値(週足・早期)', data: weeklyClose, borderColor: '#d2a8ff',
       backgroundColor: 'transparent', borderWidth: 2, borderDash: [6, 3],
       pointRadius: 3, pointBackgroundColor: '#d2a8ff', fill: false, tension: 0.15,
+    });
+  }
+  if (estimateClose) {
+    priceDatasets.push({
+      label: '終値(次月推定)', data: estimateClose, borderColor: '#8b949e',
+      backgroundColor: 'transparent', borderWidth: 2, borderDash: [1, 3],
+      pointRadius: 4, pointStyle: 'circle', pointBackgroundColor: 'transparent',
+      pointBorderColor: '#8b949e', pointBorderWidth: 2, fill: false, tension: 0,
     });
   }
   priceChart = new Chart(pCtx, {
@@ -1690,6 +1737,19 @@ function drawCharts(data) {
     );
   }
 
+  if (estimateMacd) {
+    datasets.push(
+      { type: 'line', label: 'MACD(次月推定)', data: estimateMacd,
+        borderColor: '#8b949e', backgroundColor: 'transparent', borderWidth: 2,
+        borderDash: [1, 3], pointRadius: 4, pointStyle: 'circle', pointBackgroundColor: 'transparent',
+        pointBorderColor: '#8b949e', pointBorderWidth: 2, tension: 0, spanGaps: false, order: 0.4 },
+      { type: 'line', label: 'シグナル(次月推定)', data: estimateSig,
+        borderColor: '#5c6470', backgroundColor: 'transparent', borderWidth: 2,
+        borderDash: [1, 3], pointRadius: 4, pointStyle: 'circle', pointBackgroundColor: 'transparent',
+        pointBorderColor: '#5c6470', pointBorderWidth: 2, tension: 0, spanGaps: false, order: -0.4 },
+    );
+  }
+
   // MACD
   const mCtx = document.getElementById('macdChart').getContext('2d');
   macdChart = new Chart(mCtx, {
@@ -1700,7 +1760,7 @@ function drawCharts(data) {
         filter: item => item.text !== '' }},
       tooltip: { ...BOPTS.plugins.tooltip, callbacks: {
         label: ctx => ctx.dataset.label ? ` ${ctx.dataset.label}: ${Number(ctx.raw).toFixed(4)}` : null }},
-      annotation: { annotations: { ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal, weeklyStartIdx), ...dividerAnnotation } },
+      annotation: { annotations: { ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal, weeklyStartIdx, estimateStartIdx), ...dividerAnnotation } },
       zoom: {
         zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },
