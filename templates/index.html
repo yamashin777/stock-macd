@@ -1493,10 +1493,13 @@ async function fetchAiComment(force = false) {
     if (data.prompt_used) _updatePromptTooltip(data.prompt_used);
     if (data.comment) {
       box.className = 'ai-comment-box';
+      const truncNote = data.finish_reason === 'MAX_TOKENS'
+        ? `<div style="font-size:10px;color:#e3b341;margin-top:6px">⚠ 文字数制限により途中で終了しました。↻ 再取得をお試しください。</div>`
+        : '';
       const dateHtml = data.fetched_at
         ? `<div style="font-size:10px;color:var(--muted);margin-top:8px">📅 取得日時: ${escapeHtml(data.fetched_at)}${data.stale ? '（制限中のため古い情報）' : ''}</div>`
         : '';
-      box.innerHTML = escapeHtml(data.comment).replace(/\n/g, '<br>') + dateHtml;
+      box.innerHTML = escapeHtml(data.comment).replace(/\n/g, '<br>') + truncNote + dateHtml;
     } else if (res.status === 429 || data.error === 'rate_limit') {
       box.className = 'ai-comment-box error';
       box.innerHTML =

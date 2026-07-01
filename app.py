@@ -1353,7 +1353,7 @@ def ai_comment():
     ]
     payload = {
         'contents': [{'parts': [{'text': prompt}]}],
-        'generationConfig': {'maxOutputTokens': 2048, 'temperature': 0.7},
+        'generationConfig': {'maxOutputTokens': 4096, 'temperature': 0.7},
     }
     last_err = 'モデルが見つかりませんでした'
     for model in _GEMINI_MODELS:
@@ -1372,7 +1372,9 @@ def ai_comment():
             text = candidate['content']['parts'][0]['text']
             finish = candidate.get('finishReason', '')
             if finish == 'MAX_TOKENS':
-                print(f'[ai] {ticker} MAX_TOKENS hit (model={model})')
+                print(f'[ai] {ticker} MAX_TOKENS hit (model={model}), trying next model')
+                last_err = f'モデル {model}: MAX_TOKENS'
+                continue  # 次のモデルで再試行
             now_ts = time.time()
             _ai_cache[ticker] = {'text': text, 'ts': now_ts}
             _save_ai_comments(_ai_cache)
