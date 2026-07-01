@@ -1399,17 +1399,6 @@ function renderDetail(data) {
       <div class="ai-comment-box loading" id="ai-comment-box">🤖 AIが月足MACDデータを分析中です…</div>
     </div>
 
-    <div class="news-section" id="news-section">
-      <div class="news-section-title">📰 直近ニュース</div>
-      <div class="news-loading" id="news-loading">取得中…</div>
-      <ul class="news-list" id="news-list" style="display:none"></ul>
-    </div>
-
-    <div class="detail-memo-hd">
-      <div class="detail-memo-lbl">メモ</div>
-    </div>
-    <div class="detail-memo">${data.memo ? linkifyMemo(data.memo) : '<span style="opacity:.4">メモなし — ✎ 編集から追加できます</span>'}</div>
-
     <div class="period-bar">
       <span class="period-lbl">表示期間:</span>
       <button class="pbtn" data-m="12" onclick="applyPeriod(12)">1年</button>
@@ -1436,7 +1425,18 @@ function renderDetail(data) {
     <div class="chart-box">
       <div class="chart-lbl">MACD (12,26,9) — 青:MACD線　橙:シグナル線　棒:ヒストグラム</div>
       <div class="ch-macd"><canvas id="macdChart"></canvas></div>
-    </div>`;
+    </div>
+
+    <div class="news-section" id="news-section">
+      <div class="news-section-title">📰 直近ニュース</div>
+      <div class="news-loading" id="news-loading">取得中…</div>
+      <ul class="news-list" id="news-list" style="display:none"></ul>
+    </div>
+
+    <div class="detail-memo-hd">
+      <div class="detail-memo-lbl">メモ</div>
+    </div>
+    <div class="detail-memo">${data.memo ? linkifyMemo(data.memo) : '<span style="opacity:.4">メモなし — ✎ 編集から追加できます</span>'}</div>`;
 
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   drawCharts(data);
