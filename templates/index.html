@@ -1369,10 +1369,17 @@ function renderDetail(data) {
         if (data.next_month_signal_type == null) return '';
         const nmCfg = sigCfg(data.next_month_signal);
         const baseDate = data.updated_at ? data.updated_at.slice(0, 10) : '';
+        const nmLabel = data.next_month_label || '';
+        const todayYM = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+        const isDelayed = nmLabel && nmLabel <= todayYM; // 当月以前なら遅延
+        const delayNote = isDelayed
+          ? `<div style="font-size:10px;color:#e3b341;margin-top:3px;line-height:1.4">⚠ 通常は翌月が推定対象ですが、${nmLabel.replace('-','年')}月のデータ取得が遅延しているため、この月を推定しています。しばらくすると自動で更新されます。</div>`
+          : '';
         return `<div class="stat" title="現在値のまま株価が変わらなかった場合の参考値（実際の値動き次第で変わります）">
-          <div class="stat-lbl">次月推定 (${escapeHtml(data.next_month_label || '')})</div>
+          <div class="stat-lbl">次月推定 (${escapeHtml(nmLabel)})</div>
           <div class="stat-val"><span class="badge ${nmCfg.cls}" style="font-size:10px;padding:2px 8px">${nmCfg.lbl}</span></div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px">※${escapeHtml(baseDate)}時点の株価 ${sym(data.currency)}${fmtPrice(data.current_price, data.currency)} で据え置きと仮定</div>
+          ${delayNote}
         </div>`;
       })()}
     </div>
