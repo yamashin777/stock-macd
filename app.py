@@ -1332,11 +1332,8 @@ def ai_comment():
     market_label = '日本株' if is_jp else '米国株'
     price_str    = f'{price:,.0f}円' if is_jp else f'${price:.2f}'
 
-    prompt = f"""{name}（{ticker}/{market_label}）の月足MACDを分析し、日本語で4文以内で簡潔に解説してください。
-
-データ: シグナル={signal} MACD={macd_val:+.2f} SIG={sig_val:.2f} HIST={hist_val:+.2f} GC={last_gc} DC={last_dc} 現在値={price_str}（{change_pct:+.2f}%）
-
-①MACDトレンドの現状 ②このトレンドの背景（業績・ニュース・業界） ③今後の注目ポイント の順で、簡潔に。"""
+    prompt = f"""{name}（{ticker}/{market_label}）の株価は現在{signal}（{price_str}、{change_pct:+.2f}%）です。
+この銘柄の株価が上下している主な理由を、業績・ニュース・業界動向の観点から日本語で3〜4文で簡潔に説明してください。MACDやヒストグラムなどの指標値には触れず、株価の背景・要因に絞って解説してください。"""
 
     # キャッシュ確認（force=trueの場合はスキップ）
     cached = _ai_cache.get(ticker)
