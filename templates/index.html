@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
 :root {
@@ -1590,7 +1591,7 @@ function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimate
 
     ann[`sig_${n++}`] = {
       type: 'line',
-      xMin: i, xMax: i,                          // category index
+      xMin: dates[i], xMax: dates[i],            // ISO date string
       borderColor: color + '55',
       borderWidth: 1.5,
       borderDash: isEstimate ? [1, 3] : isWeekly ? [2, 2] : [4, 3],
@@ -1667,18 +1668,25 @@ const BOPTS = {
                titleColor: '#e6edf3', bodyColor: '#8b949e', padding: 10 },
   },
   scales: {
-    x: { ticks: { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 12, maxRotation: 0 }, grid: { color: '#21262d' } },
+    x: {
+      type: 'time',
+      time: { tooltipFormat: 'yyyy-MM', displayFormats: { month: 'yyyy-MM', day: 'MM-dd' } },
+      ticks: { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 12, maxRotation: 0 },
+      grid: { color: '#21262d' },
+    },
     y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } },
   },
 };
 
 function drawCharts(data) {
-  const { dates, close, macd, signal, histogram } = getSlice(data.chart, currentPeriod);
+  const { dates: rawDates, close, macd, signal, histogram } = getSlice(data.chart, currentPeriod);
   const s = sym(data.currency), cur = data.currency;
 
+  // "YYYY-MM" → "YYYY-MM-01"、"YYYY-MM-DD" はそのまま
+  const toISO = d => (d && d.length === 7) ? d + '-01' : d;
+  const dates = rawDates.map(toISO);
+
   // 直近1ヶ月分の週足データを「月足の本当の最終点」の後ろに追加する
-  // （月足の最終点＝現在のシグナルバッジが使っている値。これを欠落させない）
-  // ※ price/MACD両チャートで同じラベル配列を使う必要がある（ズーム同期のため）
   let mDates = dates, mClose = close, mHist = histogram, mMacd = macd, mSignal = signal;
   let weeklyClose = null, weeklyHist = null, weeklyMacd = null, weeklySig = null, weeklyStartIdx = -1;
   const wr = data.weekly_recent;
@@ -1712,7 +1720,8 @@ function drawCharts(data) {
   if (data.next_month_label && data.next_month_macd != null) {
     const beforeLen = mDates.length;
     estimateStartIdx = beforeLen;
-    mDates = mDates.concat([data.next_month_label + '(推定)']);
+    const estimateISODate = data.next_month_label + '-01';
+    mDates = mDates.concat([estimateISODate]);
     mClose = mClose.concat([null]);
     mHist  = mHist.concat([null]);
     mMacd  = mMacd.concat([null]);
@@ -1735,18 +1744,20 @@ function drawCharts(data) {
   const mergedSignal = mSignal.map((v, i) => v ?? (weeklySig ? weeklySig[i] : null) ?? (estimateSig ? estimateSig[i] : null));
 
   // 週足セクションの開始位置を示す縦の区切り線（price/MACD共通）
-  const dividerAnnotation = (weeklyStartIdx > 0) ? {
+  const weeklyDividerDate = (weeklyStartIdx > 0 && wr && wr.dates.length) ? wr.dates[0] : null;
+  const estimateDividerDate = (estimateStartIdx > 0 && wr && wr.dates.length) ? wr.dates[wr.dates.length - 1] : null;
+  const dividerAnnotation = weeklyDividerDate ? {
     weeklyDivider: {
-      type: 'line', xMin: weeklyStartIdx - 1, xMax: weeklyStartIdx - 1,
+      type: 'line', xMin: weeklyDividerDate, xMax: weeklyDividerDate,
       borderColor: '#e6b800', borderWidth: 1.5, borderDash: [2, 2],
       label: { display: true, content: '直近1ヶ月は週足', position: 'start',
         backgroundColor: '#e6b800e0', color: '#000', font: { size: 9, weight: 700 },
         padding: { x: 5, y: 2 }, borderRadius: 3, yAdjust: 14, rotation: 0 },
     },
   } : {};
-  if (estimateStartIdx > 0) {
+  if (estimateDividerDate) {
     dividerAnnotation.estimateDivider = {
-      type: 'line', xMin: estimateStartIdx - 1, xMax: estimateStartIdx - 1,
+      type: 'line', xMin: estimateDividerDate, xMax: estimateDividerDate,
       borderColor: '#8b949e', borderWidth: 1.5, borderDash: [1, 3],
       label: { display: true, content: '次月は推定値', position: 'end',
         backgroundColor: '#8b949ee0', color: '#000', font: { size: 9, weight: 700 },
@@ -1783,14 +1794,17 @@ function drawCharts(data) {
     data: { labels: mDates, datasets: priceDatasets },
     options: { ...BOPTS, plugins: { ...BOPTS.plugins,
       tooltip: { ...BOPTS.plugins.tooltip,
-        callbacks: { label: ctx => ` ${s}${fmtPrice(ctx.raw, cur)}` }},
+        callbacks: {
+          title: items => items.length ? items[0].label + (items[0].dataIndex === estimateStartIdx ? '（推定）' : '') : '',
+          label: ctx => ` ${s}${fmtPrice(ctx.raw, cur)}`,
+        }},
       annotation: { annotations: dividerAnnotation },
       zoom: {
         zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },
         pan:  { enabled: true, mode: 'x',
                 onPanComplete:  ({ chart }) => syncChartZoom(chart) },
-        limits: { x: { minRange: 4 } },
+        limits: { x: { minRange: 4 * 30 * 24 * 3600 * 1000 } },
       },
     }},
   });
@@ -1843,6 +1857,7 @@ function drawCharts(data) {
       legend: { ...BOPTS.plugins.legend, labels: { ...BOPTS.plugins.legend.labels,
         filter: item => item.text !== '' }},
       tooltip: { ...BOPTS.plugins.tooltip, callbacks: {
+        title: items => items.length ? items[0].label + (items[0].dataIndex === estimateStartIdx ? '（推定）' : '') : '',
         label: ctx => ctx.dataset.label ? ` ${ctx.dataset.label}: ${Number(ctx.raw).toFixed(4)}` : null }},
       annotation: { annotations: { ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal, weeklyStartIdx, estimateStartIdx), ...dividerAnnotation } },
       zoom: {
@@ -1850,7 +1865,7 @@ function drawCharts(data) {
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },
         pan:  { enabled: true, mode: 'x',
                 onPanComplete:  ({ chart }) => syncChartZoom(chart) },
-        limits: { x: { minRange: 4 } },
+        limits: { x: { minRange: 4 * 30 * 24 * 3600 * 1000 } },
       },
     }},
   });
