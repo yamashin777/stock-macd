@@ -2062,6 +2062,22 @@ function switchTab(tab) {
 }
 
 // ── 銘柄スキャン ────────────────────────────────────────────────────────────
+const _SCAN_LS_KEY = 'scanData_v1';
+const _SCAN_LS_TTL = 24 * 3600 * 1000;  // 24時間
+
+function _saveScanCache(data) {
+  try { localStorage.setItem(_SCAN_LS_KEY, JSON.stringify({ ...data, _ts: Date.now() })); } catch(e) {}
+}
+function _loadScanCache() {
+  try {
+    const raw = localStorage.getItem(_SCAN_LS_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (Date.now() - (d._ts || 0) < _SCAN_LS_TTL) return d;
+  } catch(e) {}
+  return null;
+}
+
 let scanData    = null;
 let scanFilter  = 'gc3';
 let scanSortKey = 'gc';   // 'gc' | 'ticker' | 'price' | 'change' | 'signal'
@@ -2082,6 +2098,15 @@ function setScanSort(key) {
 let _scanPolling = false;
 
 async function loadScan(force = false) {
+  if (!force) {
+    const cached = _loadScanCache();
+    if (cached) {
+      scanData = cached;
+      document.getElementById('scan-toolbar').style.display = '';
+      renderScanView();
+      return;
+    }
+  }
   document.getElementById('scan-toolbar').style.display = 'none';
   _showScanLoading(0, null);
   _scanPolling = true;
@@ -2152,6 +2177,7 @@ async function _pollScan(force, startTime) {
     if (data.status === 'done') {
       _scanPolling = false;
       scanData = data;
+      _saveScanCache(data);
       renderScanView();
     } else {
       // まだ実行中 → 3秒後に再確認
