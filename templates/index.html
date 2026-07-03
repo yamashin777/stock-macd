@@ -981,7 +981,7 @@ let order          = [];   // watchlist order
 let active         = null;
 let priceChart     = null;
 let macdChart      = null;
-let currentPeriod  = 36;   // months shown in detail charts (default 3 years)
+let currentPeriod  = 12;   // months shown in detail charts (default 1 year)
 let detailData     = null;  // full data of currently shown stock
 let modalTicker    = null;  // ticker currently being edited in modal
 let sortableInst   = null;  // SortableJS instance
@@ -1297,7 +1297,7 @@ function selectCard(t) {
 function closeDetail() {
   active        = null;
   detailData    = null;
-  currentPeriod = 36;
+  currentPeriod = 12;
   if (_aiRetryTimer) { clearInterval(_aiRetryTimer); _aiRetryTimer = null; }
   document.querySelectorAll('.card').forEach(el => el.classList.remove('active'));
   document.getElementById('detail').style.display = 'none';
@@ -1314,7 +1314,7 @@ function destroyCharts() {
 function renderDetail(data) {
   destroyCharts();
   detailData    = data;
-  currentPeriod = 36;
+  currentPeriod = 12;
   const s           = sym(data.currency);
   const cfg         = sigCfg(data.signal);
   const sgn         = data.change >= 0 ? '+' : '';
@@ -1401,8 +1401,8 @@ function renderDetail(data) {
 
     <div class="period-bar">
       <span class="period-lbl">表示期間:</span>
-      <button class="pbtn" data-m="12" onclick="applyPeriod(12)">1年</button>
-      <button class="pbtn on"  data-m="36" onclick="applyPeriod(36)">3年</button>
+      <button class="pbtn on" data-m="12" onclick="applyPeriod(12)">1年</button>
+      <button class="pbtn"  data-m="36" onclick="applyPeriod(36)">3年</button>
       <button class="pbtn" data-m="60" onclick="applyPeriod(60)">5年</button>
       <button class="pbtn" data-m="120" onclick="applyPeriod(120)">10年</button>
       <button class="pbtn" onclick="resetZoom()" title="ズームをリセット">↺ リセット</button>
