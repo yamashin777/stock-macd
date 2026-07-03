@@ -1379,7 +1379,6 @@ function renderDetail(data) {
           <div class="stat-lbl">次月推定 (${escapeHtml(nmLabel)})${delayTag}</div>
           <div class="stat-val"><span class="badge ${nmCfg.cls}" style="font-size:10px;padding:2px 8px">${nmCfg.lbl}</span></div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px">※${escapeHtml(baseDate)}時点の株価 ${sym(data.currency)}${fmtPrice(data.current_price, data.currency)} で据え置きと仮定</div>
-          ${delayNote}
         </div>`;
       })()}
     </div>
