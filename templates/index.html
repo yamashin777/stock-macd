@@ -1764,24 +1764,29 @@ function drawCharts(data) {
         padding: { x: 5, y: 2 }, borderRadius: 3, yAdjust: -14, rotation: 0 },
     };
   }
-  // 当月推定シグナルを推定点に表示（推定点でクロスが起きていない場合のみ＝重複防止）
-  if (estimateStartIdx > 0 && data.next_month_signal_type && data.next_month_signal_type !== 'neutral') {
+  // 当月推定シグナルを推定点に表示
+  if (estimateStartIdx > 0 && data.next_month_label && data.next_month_signal_type && data.next_month_signal_type !== 'neutral') {
     const ei = estimateStartIdx;
+    // 週足の最終日と推定月が同月 → データ遅延による重複になるため非表示
+    const lastWeeklyDate = wr && wr.dates.length ? wr.dates[wr.dates.length - 1] : '';
+    const estYM = data.next_month_label; // "YYYY-MM"
+    const lastWeeklyYM = lastWeeklyDate.slice(0, 7);
+    const isDelayedOverlap = estYM === lastWeeklyYM;
+    // 推定点でクロスが既に検出されている場合も非表示（buildMacdAnnotationsが担当）
     const hasCrossAtEstimate = ei > 0 &&
       mergedMacd[ei] != null && mergedMacd[ei-1] != null &&
       mergedSignal[ei] != null && mergedSignal[ei-1] != null &&
       ((mergedMacd[ei-1] <= mergedSignal[ei-1] && mergedMacd[ei] > mergedSignal[ei]) ||
        (mergedMacd[ei-1] >= mergedSignal[ei-1] && mergedMacd[ei] < mergedSignal[ei]));
-    if (!hasCrossAtEstimate) {
+    if (!hasCrossAtEstimate && !isDelayedOverlap) {
       const estGc = data.next_month_signal_type === 'buy' || data.next_month_signal_type === 'bullish';
-      // 推定アノテーションは推定データ点（hollow circle）の位置に配置
-      const estEndDate = mDates[ei];
+      const estMonth = parseInt(estYM.split('-')[1]) + '月';
       const estColor = estGc ? '#f0c040' : '#f08040';
       dividerAnnotation.estimateSignal = {
-        type: 'line', xMin: estEndDate, xMax: estEndDate,
+        type: 'line', xMin: mDates[ei], xMax: mDates[ei],
         borderColor: estColor + '55', borderWidth: 1.5, borderDash: [1, 3],
         label: { display: true,
-          content: (estGc ? '▲ 買い' : '▼ 売り') + '(当月推定)',
+          content: (estGc ? '▲ 買い' : '▼ 売り') + `(${estMonth}推定)`,
           position: estGc ? 'end' : 'start',
           backgroundColor: estColor + 'e0',
           color: '#000', font: { size: 10, weight: 700 },
