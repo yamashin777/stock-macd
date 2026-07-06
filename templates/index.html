@@ -1774,10 +1774,12 @@ function drawCharts(data) {
        (mergedMacd[ei-1] >= mergedSignal[ei-1] && mergedMacd[ei] < mergedSignal[ei]));
     if (!hasCrossAtEstimate) {
       const estGc = data.next_month_signal_type === 'buy' || data.next_month_signal_type === 'bullish';
-      const estDate = mDates[ei];
+      // 推定アノテーションは月末日に配置（月初より右に表示）
+      const estFirst = new Date(mDates[ei]);
+      const estEndDate = new Date(estFirst.getFullYear(), estFirst.getMonth() + 1, 0).toISOString().slice(0, 10);
       const estColor = estGc ? '#f0c040' : '#f08040';
       dividerAnnotation.estimateSignal = {
-        type: 'line', xMin: estDate, xMax: estDate,
+        type: 'line', xMin: estEndDate, xMax: estEndDate,
         borderColor: estColor + '55', borderWidth: 1.5, borderDash: [1, 3],
         label: { display: true,
           content: (estGc ? '▲ 買い' : '▼ 売り') + '(当月推定)',
