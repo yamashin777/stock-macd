@@ -1767,11 +1767,9 @@ function drawCharts(data) {
   // 当月推定シグナルを推定点に表示
   if (estimateStartIdx > 0 && data.next_month_label && data.next_month_signal_type && data.next_month_signal_type !== 'neutral') {
     const ei = estimateStartIdx;
-    // 週足の最終日と推定月が同月 → データ遅延による重複になるため非表示
+    // 推定日が週足の最終日以前の場合は重複・逆転になるため非表示
     const lastWeeklyDate = wr && wr.dates.length ? wr.dates[wr.dates.length - 1] : '';
-    const estYM = data.next_month_label; // "YYYY-MM"
-    const lastWeeklyYM = lastWeeklyDate.slice(0, 7);
-    const isDelayedOverlap = estYM === lastWeeklyYM;
+    const isDelayedOverlap = lastWeeklyDate && mDates[ei] <= lastWeeklyDate;
     // 推定点でクロスが既に検出されている場合も非表示（buildMacdAnnotationsが担当）
     const hasCrossAtEstimate = ei > 0 &&
       mergedMacd[ei] != null && mergedMacd[ei-1] != null &&
