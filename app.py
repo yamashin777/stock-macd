@@ -27,13 +27,16 @@ app = Flask(__name__)
 import math as _math
 
 def _sanitize_json(obj):
-    """NaN/Inf を None に変換してJSONシリアライズ可能にする"""
-    if isinstance(obj, float) and (_math.isnan(obj) or _math.isinf(obj)):
-        return None
+    """NaN/Inf を None に変換してJSONシリアライズ可能にする（numpy.float64対応）"""
     if isinstance(obj, dict):
         return {k: _sanitize_json(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_sanitize_json(v) for v in obj]
+    try:
+        if _math.isnan(obj) or _math.isinf(obj):
+            return None
+    except (TypeError, ValueError):
+        pass
     return obj
 
 WATCHLIST_FILE    = 'watchlist.json'
