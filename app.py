@@ -801,6 +801,10 @@ def normalize_ticker(ticker: str) -> str:
         return t
     if t.isdigit():
         return t + '.T'
+    # 日本株の英数字混在コード（例: 141A, 143A）
+    import re
+    if re.match(r'^\d{3}[A-Z]$', t):
+        return t + '.T'
     return t
 
 
