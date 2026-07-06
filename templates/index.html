@@ -1720,7 +1720,10 @@ function drawCharts(data) {
   if (data.next_month_label && data.next_month_macd != null) {
     const beforeLen = mDates.length;
     estimateStartIdx = beforeLen;
-    const estimateISODate = data.next_month_label + '-01';
+    // 推定点は月末に配置（週足の最終日より右に表示するため）
+    const [estY2, estM2] = data.next_month_label.split('-').map(Number);
+    const estLastDay = new Date(estY2, estM2, 0).getDate();
+    const estimateISODate = `${estY2}-${String(estM2).padStart(2,'0')}-${String(estLastDay).padStart(2,'0')}`;
     mDates = mDates.concat([estimateISODate]);
     mClose = mClose.concat([null]);
     mHist  = mHist.concat([null]);
