@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import json
 import time
+import subprocess
 import gc
 import ctypes
 import re as _re
@@ -1130,9 +1131,19 @@ def fetch_stock_data(ticker: str) -> dict:
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+def _get_version():
+    try:
+        return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
+                                       stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        return 'unknown'
+
+_APP_VERSION = _get_version()
+
+
 @app.route('/')
 def index():
-    resp = make_response(render_template('index.html'))
+    resp = make_response(render_template('index.html', app_version=_APP_VERSION))
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     resp.headers['Pragma'] = 'no-cache'
     return resp
