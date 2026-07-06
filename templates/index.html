@@ -1795,7 +1795,13 @@ function drawCharts(data) {
     options: { ...BOPTS, plugins: { ...BOPTS.plugins,
       tooltip: { ...BOPTS.plugins.tooltip,
         callbacks: {
-          title: items => items.length ? items[0].label + (items[0].dataIndex === estimateStartIdx ? '（推定）' : '') : '',
+          title: items => {
+            if (!items.length) return '';
+            const idx = items[0].dataIndex;
+            if (idx === estimateStartIdx) return mDates[idx].slice(0,7) + '（当月推定）';
+            if (weeklyStartIdx >= 0 && idx >= weeklyStartIdx) return mDates[idx] + '（週足）';
+            return items[0].label;
+          },
           label: ctx => ` ${s}${fmtPrice(ctx.raw, cur)}`,
         }},
       annotation: { annotations: dividerAnnotation },
