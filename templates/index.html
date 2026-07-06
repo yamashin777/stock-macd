@@ -1764,6 +1764,22 @@ function drawCharts(data) {
         padding: { x: 5, y: 2 }, borderRadius: 3, yAdjust: -14, rotation: 0 },
     };
   }
+  // 当月推定シグナルを推定点に常時表示（クロスの有無に関わらず）
+  if (estimateStartIdx > 0 && data.next_month_signal_type && data.next_month_signal_type !== 'neutral') {
+    const estGc = data.next_month_signal_type === 'buy' || data.next_month_signal_type === 'bullish';
+    const estDate = mDates[estimateStartIdx];
+    dividerAnnotation.estimateSignal = {
+      type: 'line', xMin: estDate, xMax: estDate,
+      borderColor: '#9aa3ad55', borderWidth: 1.5, borderDash: [1, 3],
+      label: { display: true,
+        content: (estGc ? '▲ 買い' : '▼ 売り') + '(当月推定)',
+        position: estGc ? 'end' : 'start',
+        backgroundColor: (estGc ? '#9aa3ad' : '#8b949e') + 'e0',
+        color: '#000', font: { size: 10, weight: 700 },
+        padding: { x: 6, y: 3 }, borderRadius: 4,
+        yAdjust: estGc ? -2 : 2 },
+    };
+  }
 
   // Price
   const pCtx = document.getElementById('priceChart').getContext('2d');
