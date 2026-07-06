@@ -24,6 +24,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = Flask(__name__)
 
+import math as _math
+
+def _sanitize_json(obj):
+    """NaN/Inf を None に変換してJSONシリアライズ可能にする"""
+    if isinstance(obj, float) and (_math.isnan(obj) or _math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_json(v) for v in obj]
+    return obj
+
 WATCHLIST_FILE    = 'watchlist.json'
 METADATA_FILE     = 'metadata.json'
 SCAN_LIST_FILE    = 'scan_list.json'
@@ -1177,7 +1189,7 @@ def get_all_stocks():
             else:
                 data[ticker] = enrich_with_metadata(result, profile)
 
-    return jsonify({'watchlist': wl, 'data': data, 'errors': errors})
+    return jsonify(_sanitize_json({'watchlist': wl, 'data': data, 'errors': errors}))
 
 
 @app.route('/api/watchlist', methods=['POST'])
@@ -1992,18 +2004,18 @@ def scan_signals():
                 scan_state.update({'status': 'done',
                                    'results': cached['results'],
                                    'updated_at': cached['updated_at']})
-            return jsonify({'status': 'done',
+            return jsonify(_sanitize_json({'status': 'done',
                             'results': cached['results'],
-                            'updated_at': cached['updated_at']})
+                            'updated_at': cached['updated_at']}))
 
     # メモリ上の状態確認
     with scan_lock:
         state = dict(scan_state)
 
     if state['status'] == 'done' and not force:
-        return jsonify({'status': 'done',
+        return jsonify(_sanitize_json({'status': 'done',
                         'results': state['results'],
-                        'updated_at': state['updated_at']})
+                        'updated_at': state['updated_at']}))
 
     # バックグラウンドスレッド起動（まだ動いていない場合）
     if state['status'] != 'running':
@@ -2154,7 +2166,7 @@ def search_ticker():
 def get_stock(ticker):
     profile = _req_profile()
     try:
-        return jsonify(enrich_with_metadata(fetch_stock_data(ticker), profile))
+        return jsonify(_sanitize_json(enrich_with_metadata(fetch_stock_data(ticker), profile)))
     except ValueError as e:
         return jsonify({'error': str(e)}), 404
     except Exception as e:
