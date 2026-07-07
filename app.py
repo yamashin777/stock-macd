@@ -1035,10 +1035,10 @@ def fetch_stock_data(ticker: str) -> dict:
         w_idx = strip_tz(w_close.index)
         weekly_signal_date = w_idx[-1].strftime('%Y-%m-%d')
 
-        # 直近の月（最新の月足バケット）に該当する週足データを抜き出す
-        # → グラフ上で「最新月だけ」週足の細かい動きを色を変えて表示するために使う
-        last_month_start = strip_tz(hist.index)[-1]
-        mask = w_idx >= last_month_start
+        # 当月（まだ月足が確定していない月）の週足データのみ抜き出す
+        # → 月足確定前の早期シグナルとして当月分だけ表示する
+        current_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        mask = w_idx >= current_month_start
         if mask.any():
             weekly_recent = {
                 'dates':     w_idx[mask].strftime('%Y-%m-%d').tolist(),
