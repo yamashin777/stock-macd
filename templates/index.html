@@ -1724,10 +1724,18 @@ function drawCharts(data) {
   if (data.next_month_label && data.next_month_macd != null) {
     const beforeLen = mDates.length;
     estimateStartIdx = beforeLen;
-    // 推定点は月末に配置（週足の最終日より右に表示するため）
-    const [estY2, estM2] = data.next_month_label.split('-').map(Number);
-    const estLastDay = new Date(estY2, estM2, 0).getDate();
-    const estimateISODate = `${estY2}-${String(estM2).padStart(2,'0')}-${String(estLastDay).padStart(2,'0')}`;
+    // 推定点は「最後の週足データの7日後」に配置（月末だとX軸が大きく伸びるため）
+    const lastWDate = wr && wr.dates.length ? wr.dates[wr.dates.length - 1] : null;
+    let estimateISODate;
+    if (lastWDate) {
+      const d = new Date(lastWDate);
+      d.setDate(d.getDate() + 7);
+      estimateISODate = d.toISOString().slice(0, 10);
+    } else {
+      const [estY2, estM2] = data.next_month_label.split('-').map(Number);
+      const estLastDay = new Date(estY2, estM2, 0).getDate();
+      estimateISODate = `${estY2}-${String(estM2).padStart(2,'0')}-${String(estLastDay).padStart(2,'0')}`;
+    }
     mDates = mDates.concat([estimateISODate]);
     mClose = mClose.concat([null]);
     mHist  = mHist.concat([null]);
