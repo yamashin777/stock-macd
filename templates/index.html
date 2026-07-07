@@ -1797,7 +1797,18 @@ function drawCharts(data) {
       mergedSignal[ei] != null && mergedSignal[ei-1] != null &&
       ((mergedMacd[ei-1] <= mergedSignal[ei-1] && mergedMacd[ei] > mergedSignal[ei]) ||
        (mergedMacd[ei-1] >= mergedSignal[ei-1] && mergedMacd[ei] < mergedSignal[ei]));
-    if (!hasCrossAtEstimate && !isDelayedOverlap) {
+    // 週足エリアにクロスが既にある場合も非表示（同じ時間軸に2つ並ぶのを防ぐ）
+    const hasWeeklyCross = weeklyStartIdx >= 0 && (() => {
+      for (let i = weeklyStartIdx + 1; i < ei; i++) {
+        if (mergedMacd[i] == null || mergedMacd[i-1] == null) continue;
+        if (mergedSignal[i] == null || mergedSignal[i-1] == null) continue;
+        const gc = mergedMacd[i-1] <= mergedSignal[i-1] && mergedMacd[i] > mergedSignal[i];
+        const dc = mergedMacd[i-1] >= mergedSignal[i-1] && mergedMacd[i] < mergedSignal[i];
+        if (gc || dc) return true;
+      }
+      return false;
+    })();
+    if (!hasCrossAtEstimate && !isDelayedOverlap && !hasWeeklyCross) {
       const estGc = data.next_month_signal_type === 'buy' || data.next_month_signal_type === 'bullish';
       const estColor = estGc ? '#f0c040' : '#f08040';
       dividerAnnotation.estimateSignal = {
