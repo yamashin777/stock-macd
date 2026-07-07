@@ -1371,13 +1371,14 @@ function renderDetail(data) {
         const nmCfg = sigCfg(data.next_month_signal);
         const baseDate = data.updated_at ? data.updated_at.slice(0, 10) : '';
         const nmLabel = data.next_month_label || '';
+        const nmMonth = nmLabel ? parseInt(nmLabel.split('-')[1]) + '月' : '当月';
         const todayYM = new Date().toISOString().slice(0, 7); // "YYYY-MM"
         const isDelayed = nmLabel && nmLabel < todayYM; // 当月より前なら遅延（当月はまだ未確定のため正常）
         const delayTag = isDelayed
           ? ` <span style="color:#e3b341;font-size:9px;font-weight:600">⚠ データ遅延中</span>`
           : '';
         return `<div class="stat" title="今月末まで株価が変わらなかった場合の参考値（実際の値動き次第で変わります）">
-          <div class="stat-lbl">当月推定 (${escapeHtml(nmLabel)})${delayTag}</div>
+          <div class="stat-lbl">${nmMonth}推定 (${escapeHtml(nmLabel)})${delayTag}</div>
           <div class="stat-val"><span class="badge ${nmCfg.cls}" style="font-size:10px;padding:2px 8px">${nmCfg.lbl}</span></div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px">※${escapeHtml(baseDate)}時点の株価 ${sym(data.currency)}${fmtPrice(data.current_price, data.currency)} で据え置きと仮定</div>
         </div>`;
@@ -1415,7 +1416,7 @@ function renderDetail(data) {
       <span class="legend-item" data-tip="直近1ヶ月分のみ、週単位のMACDで計算した参考値。月足が確定する前に、週足ベースで先行する変化の兆候を示します。買いは紫、売りは金色。">
         <span class="legend-swatch legend-dash" style="border-color:#d2a8ff"></span>週足（早期シグナル）</span>
       <span class="legend-item" data-tip="今月末まで株価が変わらなかったと仮定して計算した参考値です。実際の値動き次第で結果は変わります。あくまで「今のまま動かなければ月末はこうなる」という目安です。">
-        <span class="legend-swatch legend-dot" style="border-color:#8b949e"></span>当月推定（仮定ベースの参考値）</span>
+        <span class="legend-swatch legend-dot" style="border-color:#8b949e"></span><span id="legend-est-label">推定（仮定ベースの参考値）</span></span>
     </div>
 
     <div class="chart-box">
@@ -1569,9 +1570,10 @@ function resetZoom() {
 //                 月足クロス（緑/赤）とは別の配色（紫/金）で区別する
 // estimateStartIdx: この index 以降は次月推定（仮定ベース）のクロスのため、
 //                    グレーで区別する
-function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimateStartIdx = -1) {
+function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimateStartIdx = -1, estimateMonthLabel = '') {
   const ann = {};
   let n = 0;
+  const estSuffix = estimateMonthLabel ? `(${estimateMonthLabel}推定)` : '(推定)';
   for (let i = 1; i < dates.length; i++) {
     if (macd[i] == null || signal[i] == null || macd[i-1] == null || signal[i-1] == null) continue;
     const gc = macd[i-1] <= signal[i-1] && macd[i] > signal[i];  // golden cross → 買い
@@ -1582,11 +1584,11 @@ function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimate
     // weeklyStartIdx以降（境界の橋渡し点を含む）は週足データに基づくクロス
     const isWeekly = !isEstimate && weeklyStartIdx >= 0 && i >= weeklyStartIdx;
     const color = isEstimate
-      ? (gc ? '#f0c040' : '#f08040')   // 当月推定: 買い=琥珀, 売り=オレンジ（週足と明確に区別）
+      ? (gc ? '#f0c040' : '#f08040')   // 推定: 買い=琥珀, 売り=オレンジ（週足と明確に区別）
       : isWeekly
       ? (gc ? '#d2a8ff' : '#b0c8ff')   // 週足: 買い=紫, 売り=水色
       : (gc ? '#3fb950' : '#f85149');  // 月足: 買い=緑, 売り=赤
-    const suffix = isEstimate ? '(当月推定)' : isWeekly ? '(週)' : '';
+    const suffix = isEstimate ? estSuffix : isWeekly ? '(週)' : '';
     const text  = (gc ? '▲ 買い' : '▼ 売り') + suffix;
 
     ann[`sig_${n++}`] = {
@@ -1642,7 +1644,9 @@ function _getLegendTipEl() {
 }
 
 function _legendOnHover(evt, legendItem) {
-  const tip = LEGEND_TIPS[legendItem.text];
+  // "7月推定"などの動的キーを"当月推定"にフォールバックして辞書を引く
+  const normalized = legendItem.text.replace(/\d+月推定/, '当月推定');
+  const tip = LEGEND_TIPS[legendItem.text] || LEGEND_TIPS[normalized];
   if (!tip) return;
   const el = _getLegendTipEl();
   el.textContent = tip;
@@ -1746,6 +1750,12 @@ function drawCharts(data) {
   const mergedMacd   = mMacd.map((v, i) => v ?? (weeklyMacd ? weeklyMacd[i] : null) ?? (estimateMacd ? estimateMacd[i] : null));
   const mergedSignal = mSignal.map((v, i) => v ?? (weeklySig ? weeklySig[i] : null) ?? (estimateSig ? estimateSig[i] : null));
 
+  // 推定月のラベル（例: "7月"）
+  const estYM2 = data.next_month_label || '';
+  const estMonthLabel = estYM2 ? parseInt(estYM2.split('-')[1]) + '月' : '';
+  const _legEl = document.getElementById('legend-est-label');
+  if (_legEl) _legEl.textContent = (estMonthLabel || '当月') + '推定（仮定ベースの参考値）';
+
   // 週足セクションの開始位置を示す縦の区切り線（price/MACD共通）
   const weeklyDividerDate = (weeklyStartIdx > 0 && wr && wr.dates.length) ? wr.dates[0] : null;
   const estimateDividerDate = (estimateStartIdx > 0 && wr && wr.dates.length) ? wr.dates[wr.dates.length - 1] : null;
@@ -1762,7 +1772,7 @@ function drawCharts(data) {
     dividerAnnotation.estimateDivider = {
       type: 'line', xMin: estimateDividerDate, xMax: estimateDividerDate,
       borderColor: '#8b949e', borderWidth: 1.5, borderDash: [1, 3],
-      label: { display: true, content: '当月は推定値', position: 'end',
+      label: { display: true, content: (estMonthLabel || '当月') + 'は推定値', position: 'end',
         backgroundColor: '#8b949ee0', color: '#000', font: { size: 9, weight: 700 },
         padding: { x: 5, y: 2 }, borderRadius: 3, yAdjust: -14, rotation: 0 },
     };
@@ -1781,13 +1791,12 @@ function drawCharts(data) {
        (mergedMacd[ei-1] >= mergedSignal[ei-1] && mergedMacd[ei] < mergedSignal[ei]));
     if (!hasCrossAtEstimate && !isDelayedOverlap) {
       const estGc = data.next_month_signal_type === 'buy' || data.next_month_signal_type === 'bullish';
-      const estMonth = parseInt(estYM.split('-')[1]) + '月';
       const estColor = estGc ? '#f0c040' : '#f08040';
       dividerAnnotation.estimateSignal = {
         type: 'line', xMin: mDates[ei], xMax: mDates[ei],
         borderColor: estColor + '55', borderWidth: 1.5, borderDash: [1, 3],
         label: { display: true,
-          content: (estGc ? '▲ 買い' : '▼ 売り') + `(${estMonth}推定)`,
+          content: (estGc ? '▲ 買い' : '▼ 売り') + `(${estMonthLabel || '当月'}推定)`,
           position: estGc ? 'end' : 'start',
           backgroundColor: estColor + 'e0',
           color: '#000', font: { size: 10, weight: 700 },
@@ -1815,7 +1824,7 @@ function drawCharts(data) {
   }
   if (estimateClose) {
     priceDatasets.push({
-      label: '終値(当月推定)', data: estimateClose, borderColor: '#8b949e',
+      label: `終値(${estMonthLabel || '当月'}推定)`, data: estimateClose, borderColor: '#8b949e',
       backgroundColor: 'transparent', borderWidth: 2, borderDash: [1, 3],
       pointRadius: 4, pointStyle: 'circle', pointBackgroundColor: 'transparent',
       pointBorderColor: '#8b949e', pointBorderWidth: 2, fill: false, tension: 0,
@@ -1830,7 +1839,7 @@ function drawCharts(data) {
           title: items => {
             if (!items.length) return '';
             const idx = items[0].dataIndex;
-            if (idx === estimateStartIdx) return mDates[idx].slice(0,7) + '（当月推定）';
+            if (idx === estimateStartIdx) return mDates[idx].slice(0,7) + `（${estMonthLabel || '当月'}推定）`;
             if (weeklyStartIdx >= 0 && idx >= weeklyStartIdx) return mDates[idx] + '（週足）';
             return items[0].label;
           },
@@ -1875,11 +1884,11 @@ function drawCharts(data) {
 
   if (estimateMacd) {
     datasets.push(
-      { type: 'line', label: 'MACD(当月推定)', data: estimateMacd,
+      { type: 'line', label: `MACD(${estMonthLabel || '当月'}推定)`, data: estimateMacd,
         borderColor: '#8b949e', backgroundColor: 'transparent', borderWidth: 2,
         borderDash: [1, 3], pointRadius: 4, pointStyle: 'circle', pointBackgroundColor: 'transparent',
         pointBorderColor: '#8b949e', pointBorderWidth: 2, tension: 0, spanGaps: false, order: 0.4 },
-      { type: 'line', label: 'シグナル(当月推定)', data: estimateSig,
+      { type: 'line', label: `シグナル(${estMonthLabel || '当月'}推定)`, data: estimateSig,
         borderColor: '#5c6470', backgroundColor: 'transparent', borderWidth: 2,
         borderDash: [1, 3], pointRadius: 4, pointStyle: 'circle', pointBackgroundColor: 'transparent',
         pointBorderColor: '#5c6470', pointBorderWidth: 2, tension: 0, spanGaps: false, order: -0.4 },
@@ -1895,9 +1904,9 @@ function drawCharts(data) {
       legend: { ...BOPTS.plugins.legend, labels: { ...BOPTS.plugins.legend.labels,
         filter: item => item.text !== '' }},
       tooltip: { ...BOPTS.plugins.tooltip, callbacks: {
-        title: items => items.length ? items[0].label + (items[0].dataIndex === estimateStartIdx ? '（推定）' : '') : '',
+        title: items => items.length ? items[0].label + (items[0].dataIndex === estimateStartIdx ? `（${estMonthLabel || '当月'}推定）` : '') : '',
         label: ctx => ctx.dataset.label ? ` ${ctx.dataset.label}: ${Number(ctx.raw).toFixed(4)}` : null }},
-      annotation: { annotations: { ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal, weeklyStartIdx, estimateStartIdx), ...dividerAnnotation } },
+      annotation: { annotations: { ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal, weeklyStartIdx, estimateStartIdx, estMonthLabel), ...dividerAnnotation } },
       zoom: {
         zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },
