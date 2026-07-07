@@ -1797,30 +1797,33 @@ function drawCharts(data) {
       mergedSignal[ei] != null && mergedSignal[ei-1] != null &&
       ((mergedMacd[ei-1] <= mergedSignal[ei-1] && mergedMacd[ei] > mergedSignal[ei]) ||
        (mergedMacd[ei-1] >= mergedSignal[ei-1] && mergedMacd[ei] < mergedSignal[ei]));
-    // 週足エリアにクロスが既にある場合も非表示（同じ時間軸に2つ並ぶのを防ぐ）
-    const hasWeeklyCross = weeklyStartIdx >= 0 && (() => {
+    // 週足エリアにクロスがあるか・その方向を調べる（ラベル位置調整用）
+    let weeklyCrossGc = null;
+    if (weeklyStartIdx >= 0) {
       for (let i = weeklyStartIdx + 1; i < ei; i++) {
         if (mergedMacd[i] == null || mergedMacd[i-1] == null) continue;
         if (mergedSignal[i] == null || mergedSignal[i-1] == null) continue;
-        const gc = mergedMacd[i-1] <= mergedSignal[i-1] && mergedMacd[i] > mergedSignal[i];
-        const dc = mergedMacd[i-1] >= mergedSignal[i-1] && mergedMacd[i] < mergedSignal[i];
-        if (gc || dc) return true;
+        if (mergedMacd[i-1] <= mergedSignal[i-1] && mergedMacd[i] > mergedSignal[i]) weeklyCrossGc = true;
+        else if (mergedMacd[i-1] >= mergedSignal[i-1] && mergedMacd[i] < mergedSignal[i]) weeklyCrossGc = false;
       }
-      return false;
-    })();
-    if (!hasCrossAtEstimate && !isDelayedOverlap && !hasWeeklyCross) {
+    }
+    if (!hasCrossAtEstimate && !isDelayedOverlap) {
       const estGc = data.next_month_signal_type === 'buy' || data.next_month_signal_type === 'bullish';
       const estColor = estGc ? '#f0c040' : '#f08040';
+      // 週足クロスと近い場合、推定ラベルを反対側（上下）にずらして重ならないようにする
+      const nearWeekly = weeklyCrossGc !== null;
+      const estPosition = nearWeekly ? (estGc ? 'start' : 'end') : (estGc ? 'end' : 'start');
+      const estYAdj = nearWeekly ? (estGc ? 30 : -30) : (estGc ? -2 : 2);
       dividerAnnotation.estimateSignal = {
         type: 'line', xMin: mDates[ei], xMax: mDates[ei],
         borderColor: estColor + '55', borderWidth: 1.5, borderDash: [1, 3],
         label: { display: true,
           content: (estGc ? '▲ 買い' : '▼ 売り') + `(${estMonthLabel || '当月'}推定)`,
-          position: estGc ? 'end' : 'start',
+          position: estPosition,
           backgroundColor: estColor + 'e0',
           color: '#000', font: { size: 10, weight: 700 },
           padding: { x: 6, y: 3 }, borderRadius: 4,
-          yAdjust: estGc ? -2 : 2 },
+          yAdjust: estYAdj },
       };
     }
   }
