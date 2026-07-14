@@ -1035,9 +1035,10 @@ def fetch_stock_data(ticker: str) -> dict:
         w_idx = strip_tz(w_close.index)
         weekly_signal_date = w_idx[-1].strftime('%Y-%m-%d')
 
-        # 直近4週間分の週足データを表示（月足1本分のスペースに4点並び、間隔差が分かる）
-        four_weeks_ago = datetime.now() - timedelta(weeks=4)
-        mask = w_idx >= four_weeks_ago
+        # 当月（まだ月足が確定していない月）の週足データのみ抜き出す
+        # → 月足確定前の早期シグナルとして当月分だけ表示する
+        current_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        mask = w_idx >= current_month_start
         if mask.any():
             weekly_recent = {
                 'dates':     w_idx[mask].strftime('%Y-%m-%d').tolist(),
