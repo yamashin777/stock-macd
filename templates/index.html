@@ -1593,10 +1593,10 @@ function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimate
     const suffix = isEstimate ? estSuffix : isWeekly ? '(週)' : '';
     const text  = (gc ? '▲ 買い' : '▼ 売り') + suffix;
 
-    // 週足区間内の実データ2点間（月足からの継ぎ目は除く）だけ、実際に交差する座標を線形補間する。
-    // 継ぎ目（i-1が月足の橋渡し点）は算出基準が異なる値同士の比較なので補間せず週足側の日付をそのまま使う
+    // 週足クロスは、チャート上に実際に描画されている2点間で線が交差する座標を線形補間して求める
+    // （月足からの継ぎ目も含め、実際に線が引かれている区間はすべて対象）
     let crossDate = dates[i];
-    if (isWeekly && i - 1 >= weeklyStartIdx) {
+    if (isWeekly) {
       const y0 = macd[i-1] - signal[i-1], y1 = macd[i] - signal[i];
       if (y0 !== y1) {
         const t = y0 / (y0 - y1);
@@ -1791,8 +1791,7 @@ function drawCharts(data) {
         padding: { x: 5, y: 2 }, borderRadius: 3, yAdjust: -14, rotation: 0 },
     };
   }
-  // 当月推定シグナル: 「株価が今のまま推定月末まで変わらなかった場合」の単一の仮定なので、
-  // 補間はせず推定月末の実日付にそのまま表示する
+  // 当月推定シグナル: 週足最終値→推定値の間で実際に線が交差する座標を線形補間して表示
   // （app.py側の月足基準の判定ではなく、チャートに実際に描画されている2点だけを根拠にする）
   if (estimateStartIdx > 0 && estimateMacd && estimateSig) {
     const ei = estimateStartIdx;
@@ -1807,7 +1806,11 @@ function drawCharts(data) {
     const isDelayedOverlap = lastWeeklyDate && mDates[ei] <= lastWeeklyDate;
     if (hasEstimateCross && !isDelayedOverlap) {
       const estGc = y1 > 0;
-      const crossDate = mDates[ei];
+      // MACD-シグナルの差がゼロになる時点をブリッジ点↔推定点の間で線形補間
+      const t = y0 / (y0 - y1);
+      const x0 = new Date(mDates[ei - 1]).getTime();
+      const x1 = new Date(mDates[ei]).getTime();
+      const crossDate = new Date(x0 + t * (x1 - x0)).toISOString().slice(0, 10);
       const estColor = estGc ? '#f0c040' : '#f08040';
       // 週足エリアにクロスがあるか・その方向を調べる（ラベル位置調整用）
       let weeklyCrossGc = null;
