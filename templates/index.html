@@ -1581,6 +1581,8 @@ function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimate
     if (!gc && !dc) continue;
 
     const isEstimate = estimateStartIdx >= 0 && i >= estimateStartIdx;
+    // 推定区間のクロスは呼び出し側で線形補間して実座標に表示するため、ここでは扱わない
+    if (isEstimate) continue;
     // weeklyStartIdx以降（境界の橋渡し点を含む）は週足データに基づくクロス
     const isWeekly = !isEstimate && weeklyStartIdx >= 0 && i >= weeklyStartIdx;
     const color = isEstimate
@@ -1785,37 +1787,43 @@ function drawCharts(data) {
         padding: { x: 5, y: 2 }, borderRadius: 3, yAdjust: -14, rotation: 0 },
     };
   }
-  // 当月推定シグナルを推定点に表示
-  if (estimateStartIdx > 0 && data.next_month_label && data.next_month_signal_type && data.next_month_signal_type !== 'neutral') {
+  // 当月推定シグナル: 週足最終値→推定値の実際の交差位置を線形補間して表示
+  // （app.py側の月足基準の判定ではなく、チャートに実際に描画されている2点だけを根拠にする）
+  if (estimateStartIdx > 0 && estimateMacd && estimateSig) {
     const ei = estimateStartIdx;
+    const bMacd = estimateMacd[ei - 1], bSig = estimateSig[ei - 1];
+    const eMacd = estimateMacd[ei], eSig = estimateSig[ei];
+    const y0 = (bMacd != null && bSig != null) ? bMacd - bSig : null;
+    const y1 = (eMacd != null && eSig != null) ? eMacd - eSig : null;
+    const hasEstimateCross = y0 != null && y1 != null && y0 !== y1 &&
+      ((y0 <= 0 && y1 > 0) || (y0 >= 0 && y1 < 0));
     // 推定日が週足の最終日以前の場合は重複・逆転になるため非表示
     const lastWeeklyDate = wr && wr.dates.length ? wr.dates[wr.dates.length - 1] : '';
     const isDelayedOverlap = lastWeeklyDate && mDates[ei] <= lastWeeklyDate;
-    // 推定点でクロスが既に検出されている場合も非表示（buildMacdAnnotationsが担当）
-    const hasCrossAtEstimate = ei > 0 &&
-      mergedMacd[ei] != null && mergedMacd[ei-1] != null &&
-      mergedSignal[ei] != null && mergedSignal[ei-1] != null &&
-      ((mergedMacd[ei-1] <= mergedSignal[ei-1] && mergedMacd[ei] > mergedSignal[ei]) ||
-       (mergedMacd[ei-1] >= mergedSignal[ei-1] && mergedMacd[ei] < mergedSignal[ei]));
-    // 週足エリアにクロスがあるか・その方向を調べる（ラベル位置調整用）
-    let weeklyCrossGc = null;
-    if (weeklyStartIdx >= 0) {
-      for (let i = weeklyStartIdx + 1; i < ei; i++) {
-        if (mergedMacd[i] == null || mergedMacd[i-1] == null) continue;
-        if (mergedSignal[i] == null || mergedSignal[i-1] == null) continue;
-        if (mergedMacd[i-1] <= mergedSignal[i-1] && mergedMacd[i] > mergedSignal[i]) weeklyCrossGc = true;
-        else if (mergedMacd[i-1] >= mergedSignal[i-1] && mergedMacd[i] < mergedSignal[i]) weeklyCrossGc = false;
-      }
-    }
-    if (!hasCrossAtEstimate && !isDelayedOverlap) {
-      const estGc = data.next_month_signal_type === 'buy' || data.next_month_signal_type === 'bullish';
+    if (hasEstimateCross && !isDelayedOverlap) {
+      const estGc = y1 > 0;
+      // MACD-シグナルの差がゼロになる時点をブリッジ点↔推定点の間で線形補間
+      const t = y0 / (y0 - y1);
+      const x0 = new Date(mDates[ei - 1]).getTime();
+      const x1 = new Date(mDates[ei]).getTime();
+      const crossDate = new Date(x0 + t * (x1 - x0)).toISOString().slice(0, 10);
       const estColor = estGc ? '#f0c040' : '#f08040';
+      // 週足エリアにクロスがあるか・その方向を調べる（ラベル位置調整用）
+      let weeklyCrossGc = null;
+      if (weeklyStartIdx >= 0) {
+        for (let i = weeklyStartIdx + 1; i < ei; i++) {
+          if (mergedMacd[i] == null || mergedMacd[i-1] == null) continue;
+          if (mergedSignal[i] == null || mergedSignal[i-1] == null) continue;
+          if (mergedMacd[i-1] <= mergedSignal[i-1] && mergedMacd[i] > mergedSignal[i]) weeklyCrossGc = true;
+          else if (mergedMacd[i-1] >= mergedSignal[i-1] && mergedMacd[i] < mergedSignal[i]) weeklyCrossGc = false;
+        }
+      }
       // 週足クロスと近い場合、推定ラベルを反対側（上下）にずらして重ならないようにする
       const nearWeekly = weeklyCrossGc !== null;
       const estPosition = nearWeekly ? (estGc ? 'start' : 'end') : (estGc ? 'end' : 'start');
       const estYAdj = nearWeekly ? (estGc ? 30 : -30) : (estGc ? -2 : 2);
       dividerAnnotation.estimateSignal = {
-        type: 'line', xMin: mDates[ei], xMax: mDates[ei],
+        type: 'line', xMin: crossDate, xMax: crossDate,
         borderColor: estColor + '55', borderWidth: 1.5, borderDash: [1, 3],
         label: { display: true,
           content: (estGc ? '▲ 買い' : '▼ 売り') + `(${estMonthLabel || '当月'}推定)`,
@@ -1867,7 +1875,9 @@ function drawCharts(data) {
           },
           label: ctx => ` ${s}${fmtPrice(ctx.raw, cur)}`,
         }},
-      annotation: { annotations: dividerAnnotation },
+      // 推定クロスラベル(estimateSignal)はMACDチャートのみに表示し、価格チャートでは重複させない
+      annotation: { annotations: Object.fromEntries(
+        Object.entries(dividerAnnotation).filter(([k]) => k !== 'estimateSignal')) },
       zoom: {
         zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },
