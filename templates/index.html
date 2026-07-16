@@ -1714,23 +1714,19 @@ function drawCharts(data) {
     mDates = dates.concat(wr.dates);
     weeklyStartIdx = baseLen;
 
-    mClose = close.concat(Array(wr.dates.length).fill(null));
-    weeklyClose = Array(Math.max(0, baseLen - 1)).fill(null)
-      .concat([close[baseLen - 1]])
-      .concat(wr.close);
+    // 実線は「週足の最初の実データ点」まで伸ばしてから終える（接続点を6月ではなく7/5側に置く）
+    // → 6月は完全に実線のみ、破線は週足の実データ(7/5〜)だけになり、線も途切れない
+    mClose = close.concat([wr.close[0]]).concat(Array(Math.max(0, wr.dates.length - 1)).fill(null));
+    weeklyClose = Array(baseLen).fill(null).concat(wr.close);
 
     mHist = histogram.concat(Array(wr.dates.length).fill(null));
     weeklyHist = Array(baseLen).fill(null).concat(wr.histogram);
 
-    mMacd = macd.concat(Array(wr.dates.length).fill(null));
-    weeklyMacd = Array(Math.max(0, baseLen - 1)).fill(null)
-      .concat([macd[baseLen - 1]])   // 接続点（月足の本当の最終値＝バッジと同じ値）
-      .concat(wr.macd);
+    mMacd = macd.concat([wr.macd[0]]).concat(Array(Math.max(0, wr.dates.length - 1)).fill(null));
+    weeklyMacd = Array(baseLen).fill(null).concat(wr.macd);
 
-    mSignal = signal.concat(Array(wr.dates.length).fill(null));
-    weeklySig = Array(Math.max(0, baseLen - 1)).fill(null)
-      .concat([signal[baseLen - 1]])
-      .concat(wr.signal);
+    mSignal = signal.concat([wr.signal[0]]).concat(Array(Math.max(0, wr.dates.length - 1)).fill(null));
+    weeklySig = Array(baseLen).fill(null).concat(wr.signal);
   }
 
   // 次月推定（現在値で据え置きと仮定した参考値）を末尾にもう1点追加
