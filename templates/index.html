@@ -1593,10 +1593,9 @@ function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimate
     const suffix = isEstimate ? estSuffix : isWeekly ? '(週)' : '';
     const text  = (gc ? '▲ 買い' : '▼ 売り') + suffix;
 
-    // 週足クロスは、チャート上に実際に描画されている2点間で線が交差する座標を線形補間して求める
-    // （月足からの継ぎ目も含め、実際に線が引かれている区間はすべて対象）
+    // 月足・週足ともに線形補間でクロスの正確な日付を求める
     let crossDate = dates[i];
-    if (isWeekly) {
+    {
       const y0 = macd[i-1] - signal[i-1], y1 = macd[i] - signal[i];
       if (y0 !== y1) {
         const t = y0 / (y0 - y1);
