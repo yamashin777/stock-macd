@@ -802,7 +802,13 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
   <button class="tab-btn" id="tab-discovery" onclick="switchTab('discovery')">🔍 発掘スキャン
     <div class="tab-tip">日本株・米国株の主要銘柄を幅広くスキャンし、買いシグナルが出ている銘柄を自動発掘します。前回の結果はキャッシュされ、次回起動時も即表示されます。</div>
   </button>
+  <button class="tab-btn" id="tab-orders" onclick="switchTab('orders')">🔔 注文監視
+    <div class="tab-tip">指値注文の価格・期限を登録して監視します。目標価格に近づいたり期限が迫ると一覧でアラート表示します。</div>
+  </button>
 </nav>
+
+<!-- 注文アラートバナー -->
+<div id="order-alerts" style="display:none;margin:6px 12px 0;"></div>
 
 <div class="signal-view hidden" id="signal-view">
   <div id="signal-content"></div>
@@ -851,6 +857,45 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
   </div>
 
   <div id="scan-content" style="margin-top:12px"></div>
+</div>
+
+<!-- 注文監視タブ -->
+<div class="signal-view hidden" id="orders-view">
+  <div style="max-width:700px;margin:16px auto;padding:0 12px">
+    <!-- 新規登録フォーム -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">＋ 注文を登録</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <label style="font-size:11px;color:var(--muted)">銘柄コード</label>
+          <input id="ord-ticker" type="text" placeholder="例: SOXL, 7203" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-size:13px;margin-top:2px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted)">売買</label>
+          <select id="ord-direction" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-size:13px;margin-top:2px">
+            <option value="buy">買い（指値）</option>
+            <option value="sell">売り（指値）</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted)">目標価格</label>
+          <input id="ord-price" type="number" step="0.01" placeholder="例: 30.00" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-size:13px;margin-top:2px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted)">有効期限</label>
+          <input id="ord-expiry" type="date" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-size:13px;margin-top:2px">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;color:var(--muted)">メモ</label>
+        <input id="ord-memo" type="text" placeholder="例: SOXL $30で指値注文 注文有効期限180日後" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-size:13px;margin-top:2px">
+      </div>
+      <button onclick="orderAdd()" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:7px 18px;font-size:13px;font-weight:700;cursor:pointer">登録</button>
+      <span id="ord-msg" style="font-size:12px;margin-left:10px;color:var(--muted)"></span>
+    </div>
+    <!-- 登録済み一覧 -->
+    <div id="orders-list"></div>
+  </div>
 </div>
 
 <!-- 発掘スキャンタブ -->
@@ -1204,6 +1249,8 @@ function toggleSidebar() {
 
 // ── Grid rendering ─────────────────────────────────────────────────────────
 function renderGrid() {
+  // 注文アラートを最新の株価データで更新
+  if (_ordersData.length) _renderOrderAlerts();
   const grid = document.getElementById('grid');
   if (!order.length) {
     grid.innerHTML = `<div class="empty-grid"><div class="ico">📊</div><p>上の入力欄から銘柄を追加してください</p></div>`;
@@ -2099,13 +2146,14 @@ document.getElementById('t-input').addEventListener('keydown', e => {
 
 // ── タブ切り替え ────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  ['watch','signal','scan','discovery'].forEach(t => {
+  ['watch','signal','scan','discovery','orders'].forEach(t => {
     document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
   });
   document.getElementById('app-body').classList.toggle('hidden', tab !== 'watch');
   document.getElementById('signal-view').classList.toggle('hidden', tab !== 'signal');
   document.getElementById('scan-view').classList.toggle('hidden', tab !== 'scan');
   document.getElementById('discovery-view').classList.toggle('hidden', tab !== 'discovery');
+  document.getElementById('orders-view').classList.toggle('hidden', tab !== 'orders');
 
   history.replaceState(null, '', tab === 'watch' ? location.pathname : '#' + tab);
 
@@ -2116,9 +2164,9 @@ function switchTab(tab) {
   }
   if (tab === 'discovery') {
     _renderDiscContent();
-    // キャッシュ未ロードなら自動取得
     if (!discData[discMarket]) _fetchDiscCache(discMarket);
   }
+  if (tab === 'orders') renderOrdersView();
 }
 
 // ── 銘柄スキャン ────────────────────────────────────────────────────────────
@@ -3093,6 +3141,160 @@ function renderSignalView() {
 
 initAutocomplete();
 init();
+_loadOrders().then(() => _renderOrderAlerts());
+
+// ── 注文監視 ─────────────────────────────────────────────────────────────────
+let _ordersData = [];
+
+async function _loadOrders() {
+  try {
+    const res = await fetch(_pq('/api/orders'));
+    const d = await res.json();
+    _ordersData = d.orders || [];
+  } catch(e) { _ordersData = []; }
+}
+
+function _orderAlertLevel(order) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const expiry = order.expiry_date ? new Date(order.expiry_date) : null;
+  const daysLeft = expiry ? Math.ceil((expiry - today) / 86400000) : null;
+
+  const ticker = order.ticker;
+  const sd = stockData[ticker] || stockData[ticker + '.T'] || null;
+  const currentPrice = sd ? sd.current_price : null;
+  const pricePct = (currentPrice && order.target_price)
+    ? Math.abs(currentPrice - order.target_price) / order.target_price * 100
+    : null;
+
+  let level = 'normal'; // normal / warn / alert / expired
+  if (expiry && daysLeft < 0) level = 'expired';
+  else if (expiry && daysLeft <= 7) level = 'alert';
+  else if (pricePct !== null && pricePct <= 5) level = 'alert';
+  else if (expiry && daysLeft <= 14) level = 'warn';
+  else if (pricePct !== null && pricePct <= 10) level = 'warn';
+
+  return { level, daysLeft, currentPrice, pricePct };
+}
+
+function renderOrdersView() {
+  _loadOrders().then(() => _renderOrdersList());
+}
+
+function _renderOrdersList() {
+  const el = document.getElementById('orders-list');
+  if (!_ordersData.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:32px">登録された注文はありません</div>';
+    _renderOrderAlerts();
+    return;
+  }
+
+  const rows = _ordersData.map(o => {
+    const { level, daysLeft, currentPrice, pricePct } = _orderAlertLevel(o);
+    const dirLabel = o.direction === 'buy' ? '🟢 買い' : '🔴 売り';
+    const borderColor = level === 'expired' ? '#666' : level === 'alert' ? '#f85149' : level === 'warn' ? '#e3b341' : 'var(--border)';
+    const expiryStr = o.expiry_date || '—';
+    const daysStr = daysLeft !== null
+      ? (daysLeft < 0 ? `<span style="color:#f85149">期限切れ ${Math.abs(daysLeft)}日前</span>`
+         : daysLeft <= 7 ? `<span style="color:#f85149">${daysLeft}日後</span>`
+         : daysLeft <= 14 ? `<span style="color:#e3b341">${daysLeft}日後</span>`
+         : `${daysLeft}日後`)
+      : '—';
+    const priceStr = currentPrice
+      ? (pricePct <= 5 ? `<span style="color:#f85149">${currentPrice} (目標まで${pricePct.toFixed(1)}%)</span>`
+         : pricePct <= 10 ? `<span style="color:#e3b341">${currentPrice} (目標まで${pricePct.toFixed(1)}%)</span>`
+         : `${currentPrice} (目標まで${pricePct.toFixed(1)}%)`)
+      : '—';
+    const alertBadge = level === 'expired' ? '<span style="background:#444;color:#aaa;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700">期限切れ</span>'
+      : level === 'alert' ? '<span style="background:#f8514966;color:#f85149;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700">⚠ 要確認</span>'
+      : level === 'warn'  ? '<span style="background:#e3b34133;color:#e3b341;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700">△ 注意</span>'
+      : '';
+
+    return `<div style="background:var(--card);border:1px solid ${borderColor};border-radius:10px;padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <div>
+          <span style="font-size:15px;font-weight:700;color:var(--text)">${o.ticker}</span>
+          <span style="margin-left:8px;font-size:12px">${dirLabel}</span>
+          <span style="margin-left:8px;font-size:13px;color:var(--text);font-weight:600">目標: ${o.target_price}</span>
+          ${alertBadge ? '<span style="margin-left:8px">' + alertBadge + '</span>' : ''}
+        </div>
+        <button onclick="orderDelete('${o.id}')" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:2px 10px;font-size:11px;cursor:pointer">削除</button>
+      </div>
+      <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px;color:var(--muted)">
+        <div>現在値: ${priceStr}</div>
+        <div>有効期限: ${expiryStr}（${daysStr}）</div>
+        ${o.memo ? `<div style="grid-column:1/-1;color:var(--text-secondary)">📝 ${o.memo}</div>` : ''}
+        <div style="grid-column:1/-1;color:#555;font-size:11px">登録日: ${o.created_at}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = rows;
+  _renderOrderAlerts();
+}
+
+function _renderOrderAlerts() {
+  const el = document.getElementById('order-alerts');
+  const alerts = _ordersData.filter(o => {
+    const { level } = _orderAlertLevel(o);
+    return level === 'alert' || level === 'expired';
+  });
+  if (!alerts.length) { el.style.display = 'none'; return; }
+
+  el.style.display = 'block';
+  el.innerHTML = alerts.map(o => {
+    const { level, daysLeft, pricePct } = _orderAlertLevel(o);
+    const msg = level === 'expired' ? `期限切れ（${Math.abs(daysLeft)}日前）`
+      : daysLeft !== null && daysLeft <= 7 ? `期限まで${daysLeft}日`
+      : pricePct !== null ? `目標価格まで${pricePct.toFixed(1)}%`
+      : '';
+    return `<div onclick="switchTab('orders')" style="display:inline-flex;align-items:center;gap:6px;background:#f8514922;border:1px solid #f85149;color:#f85149;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600;margin:2px 4px 2px 0;cursor:pointer">
+      🔔 ${o.ticker} ${o.direction === 'buy' ? '買い' : '売り'} @${o.target_price} — ${msg}
+    </div>`;
+  }).join('');
+}
+
+async function orderAdd() {
+  const ticker  = document.getElementById('ord-ticker').value.trim().toUpperCase();
+  const dir     = document.getElementById('ord-direction').value;
+  const price   = parseFloat(document.getElementById('ord-price').value);
+  const expiry  = document.getElementById('ord-expiry').value;
+  const memo    = document.getElementById('ord-memo').value.trim();
+  const msg     = document.getElementById('ord-msg');
+
+  if (!ticker || !price) { msg.textContent = '銘柄と目標価格を入力してください'; msg.style.color='#f85149'; return; }
+
+  try {
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(_pb({ ticker, direction: dir, target_price: price, expiry_date: expiry, memo }))
+    });
+    const d = await res.json();
+    if (d.success) {
+      _ordersData = d.orders;
+      _renderOrdersList();
+      document.getElementById('ord-ticker').value = '';
+      document.getElementById('ord-price').value  = '';
+      document.getElementById('ord-expiry').value = '';
+      document.getElementById('ord-memo').value   = '';
+      msg.textContent = '登録しました'; msg.style.color = 'var(--green)';
+      setTimeout(() => msg.textContent = '', 3000);
+    } else {
+      msg.textContent = d.error || '登録失敗'; msg.style.color = '#f85149';
+    }
+  } catch(e) { msg.textContent = 'エラー: ' + e.message; msg.style.color = '#f85149'; }
+}
+
+async function orderDelete(id) {
+  if (!confirm('この注文を削除しますか？')) return;
+  const res = await fetch(_pq(`/api/orders/${id}`), {
+    method: 'DELETE',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(_pb({}))
+  });
+  const d = await res.json();
+  if (d.success) { _ordersData = d.orders; _renderOrdersList(); }
+}
 </script>
 <div id="ver-badge" onclick="navigator.clipboard.writeText('{{ app_version }}').then(()=>{const el=document.getElementById('ver-badge');el.textContent='✓ copied';setTimeout(()=>{el.textContent='ver {{ app_version }}';},1500)})"
   style="position:fixed;bottom:6px;right:10px;font-size:13px;color:#888;cursor:pointer;z-index:9999;user-select:none"

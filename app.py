@@ -42,6 +42,7 @@ def _sanitize_json(obj):
 WATCHLIST_FILE    = 'watchlist.json'
 METADATA_FILE     = 'metadata.json'
 SCAN_LIST_FILE    = 'scan_list.json'
+ORDERS_FILE       = 'orders.json'
 DEFAULT_WATCHLIST = ['AAPL', 'NVDA', '7203', '1605']
 
 # ── スキャン対象銘柄リスト & 名前辞書 ─────────────────────────────────────────
@@ -800,6 +801,34 @@ def save_metadata(meta: dict, profile: str = '') -> None:
             json.dump(meta, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f'[metadata] ローカル保存エラー: {e}')
+
+
+def load_orders(profile: str = '') -> list:
+    key   = _pkey('orders', profile)
+    fpath = _pfile(ORDERS_FILE, profile)
+    if SUPABASE_URL and SUPABASE_KEY:
+        data = _sb_load(key)
+        if data and isinstance(data.get('orders'), list):
+            return data['orders']
+    if os.path.exists(fpath):
+        try:
+            with open(fpath, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+
+def save_orders(orders: list, profile: str = '') -> None:
+    key   = _pkey('orders', profile)
+    fpath = _pfile(ORDERS_FILE, profile)
+    if SUPABASE_URL and SUPABASE_KEY:
+        _sb_save(key, {'orders': orders})
+    try:
+        with open(fpath, 'w', encoding='utf-8') as f:
+            json.dump(orders, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f'[orders] ローカル保存エラー: {e}')
 
 
 def enrich_with_metadata(result: dict, profile: str = '') -> dict:
@@ -2354,6 +2383,45 @@ def debug_scan_status():
 _ai_cache.update(_load_ai_comments())
 print(f'[startup] AI解説キャッシュ読み込み: {len(_ai_cache)}件')
 _load_disc_cache()  # 発掘スキャンの前回結果を復元
+
+# ── 注文監視 API ──────────────────────────────────────────────────────────────
+
+@app.route('/api/orders', methods=['GET'])
+def get_orders():
+    profile = _req_profile()
+    return jsonify({'orders': load_orders(profile)})
+
+
+@app.route('/api/orders', methods=['POST'])
+def add_order():
+    body    = request.get_json(silent=True) or {}
+    profile = _safe_profile(body.get('profile', ''))
+    import uuid as _uuid
+    order = {
+        'id':           str(_uuid.uuid4())[:8],
+        'ticker':       str(body.get('ticker', '')).strip().upper(),
+        'direction':    str(body.get('direction', 'buy')),   # 'buy' or 'sell'
+        'target_price': float(body.get('target_price', 0)),
+        'expiry_date':  str(body.get('expiry_date', '')),    # YYYY-MM-DD
+        'memo':         str(body.get('memo', '')).strip(),
+        'created_at':   datetime.now().strftime('%Y-%m-%d'),
+    }
+    if not order['ticker'] or order['target_price'] <= 0:
+        return jsonify({'error': '銘柄と目標価格は必須です'}), 400
+    orders = load_orders(profile)
+    orders.append(order)
+    save_orders(orders, profile)
+    return jsonify({'success': True, 'order': order, 'orders': orders})
+
+
+@app.route('/api/orders/<order_id>', methods=['DELETE'])
+def delete_order(order_id):
+    body    = request.get_json(silent=True) or {}
+    profile = _safe_profile(body.get('profile', '') or request.args.get('profile', ''))
+    orders  = [o for o in load_orders(profile) if o.get('id') != order_id]
+    save_orders(orders, profile)
+    return jsonify({'success': True, 'orders': orders})
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
