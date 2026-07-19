@@ -810,7 +810,18 @@ def load_orders(profile: str = '') -> list:
         data = _sb_load(key)
         if data and isinstance(data.get('orders'), list):
             return data['orders']
-    if os.path.exists(fpath):
+        # Supabaseにない場合はローカルから読み込んでSupabaseに同期
+        if os.path.exists(fpath):
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    local = json.load(f)
+                if local:
+                    _sb_save(key, {'orders': local})
+                    print(f'[orders] ローカル→Supabase同期: {len(local)}件')
+                return local
+            except Exception:
+                pass
+    elif os.path.exists(fpath):
         try:
             with open(fpath, 'r', encoding='utf-8') as f:
                 return json.load(f)
@@ -823,7 +834,9 @@ def save_orders(orders: list, profile: str = '') -> None:
     key   = _pkey('orders', profile)
     fpath = _pfile(ORDERS_FILE, profile)
     if SUPABASE_URL and SUPABASE_KEY:
-        _sb_save(key, {'orders': orders})
+        ok = _sb_save(key, {'orders': orders})
+        if not ok:
+            print(f'[orders] Supabase保存失敗 → ローカルのみ保存: {fpath}')
     try:
         with open(fpath, 'w', encoding='utf-8') as f:
             json.dump(orders, f, ensure_ascii=False, indent=2)
@@ -2204,6 +2217,28 @@ def get_stock(ticker):
     except Exception as e:
         return jsonify({'error': f'データ取得エラー: {e}'}), 500
 
+
+
+@app.route('/api/debug/orders-check')
+def debug_orders_check():
+    """Supabaseの注文監視データ保存状態を診断する"""
+    profile = _req_profile()
+    key = _pkey('orders', profile)
+    result = {
+        'supabase_configured': bool(SUPABASE_URL and SUPABASE_KEY),
+        'key': key,
+        'supabase_value': _sb_load(key) if (SUPABASE_URL and SUPABASE_KEY) else None,
+        'local_file_path': _pfile(ORDERS_FILE, profile),
+        'local_file_value': None,
+    }
+    fpath = _pfile(ORDERS_FILE, profile)
+    if os.path.exists(fpath):
+        try:
+            with open(fpath, 'r', encoding='utf-8') as f:
+                result['local_file_value'] = json.load(f)
+        except Exception as e:
+            result['local_file_error'] = str(e)
+    return jsonify(result)
 
 
 @app.route('/api/debug/watchlist-check')
