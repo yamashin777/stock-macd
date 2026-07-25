@@ -877,7 +877,7 @@ def strip_tz(index):
         return index
 
 
-def calculate_macd(prices, fast=12, slow=26, signal=9):
+def calculate_macd(prices, fast=12, slow=26, signal=4):
     ema_fast = prices.ewm(span=fast, min_periods=fast, adjust=False).mean()
     ema_slow = prices.ewm(span=slow, min_periods=slow, adjust=False).mean()
     macd = ema_fast - ema_slow

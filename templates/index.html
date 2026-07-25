@@ -754,7 +754,7 @@ a.card-name:hover { color: var(--blue); text-decoration: underline; }
   <button class="sb-toggle-btn" id="sb-toggle" onclick="toggleSidebar()" title="シグナル別リスト">☰</button>
   <div class="hd-title">
     <h1>📈 月足MACD ダッシュボード</h1>
-    <p>MACD (12, 26, 9) ｜ 月足 ｜ 過去3年</p>
+    <p>MACD (12, 26, 4) ｜ 月足 ｜ 過去3年</p>
   </div>
   <!-- プロファイルバッジ（?profile= 使用時のみ表示） -->
   <div id="profile-badge" style="display:none;align-items:center;gap:6px;
@@ -1386,7 +1386,7 @@ function renderDetail(data) {
     <div class="detail-hd">
       <div class="detail-left">
         <div class="d-name">${escapeHtml(displayName)}<a class="ext-link" href="${detailExtUrl}" target="_blank" rel="noopener noreferrer" title="外部サイトで開く">↗</a></div>
-        <div class="d-meta">${data.symbol} ｜ 月足 MACD (12,26,9) ｜ 更新: ${data.updated_at}</div>
+        <div class="d-meta">${data.symbol} ｜ 月足 MACD (12,26,4) ｜ 更新: ${data.updated_at}</div>
         <div class="d-sig">
           <span class="badge ${cfg.cls}" style="font-size:13px;padding:5px 14px">${cfg.lbl}</span>
           ${data.sector ? `<span class="card-sector" style="margin-left:8px;vertical-align:middle">${escapeHtml(data.sector)}</span>` : ''}
@@ -1480,7 +1480,7 @@ function renderDetail(data) {
       <div class="ch-price"><canvas id="priceChart"></canvas></div>
     </div>
     <div class="chart-box">
-      <div class="chart-lbl">MACD (12,26,9) — 青:MACD線　橙:シグナル線　棒:ヒストグラム</div>
+      <div class="chart-lbl">MACD (12,26,4) — 青:MACD線　橙:シグナル線　棒:ヒストグラム</div>
       <div class="ch-macd"><canvas id="macdChart"></canvas></div>
     </div>
 
