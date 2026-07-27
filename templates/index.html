@@ -1660,16 +1660,24 @@ function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimate
       }
     }
 
+    const tipText = isEstimate
+      ? (gc ? '【買い予測（推定）】株価が現在値のまま月末まで推移した場合、MACD線がシグナル線を上抜く見込みです。実際の値動き次第で変わります。'
+             : '【売り予測（推定）】株価が現在値のまま月末まで推移した場合、MACD線がシグナル線を下抜く見込みです。実際の値動き次第で変わります。')
+      : isWeekly
+      ? (gc ? '【買いシグナル（週足・早期）】週足MACDがシグナル線を上抜きました。月足確定前の先行シグナルです。月足でも確認が必要です。'
+             : '【売りシグナル（週足・早期）】週足MACDがシグナル線を下抜きました。月足確定前の先行シグナルです。月足でも確認が必要です。')
+      : (gc ? '【買いシグナル（月足）】月足MACDがシグナル線を上抜きました（ゴールデンクロス）。上昇トレンド転換の可能性を示します。'
+             : '【売りシグナル（月足）】月足MACDがシグナル線を下抜きました（デッドクロス）。下降トレンド転換の可能性を示します。');
     ann[`sig_${n++}`] = {
       type: 'line',
-      xMin: crossDate, xMax: crossDate,            // ISO date string
+      xMin: crossDate, xMax: crossDate,
       borderColor: color + '55',
       borderWidth: 1.5,
       borderDash: isEstimate ? [1, 3] : isWeekly ? [2, 2] : [4, 3],
       label: {
         display: true,
         content: text,
-        position: gc ? 'end' : 'start',          // 買い→上端, 売り→下端
+        position: gc ? 'end' : 'start',
         backgroundColor: color + 'e0',
         color: (isWeekly || isEstimate) ? '#000' : '#fff',
         font: { size: 10, weight: 700 },
@@ -1677,6 +1685,8 @@ function buildMacdAnnotations(dates, macd, signal, weeklyStartIdx = -1, estimate
         borderRadius: 4,
         yAdjust: gc ? -2 : 2,
       },
+      enter: (ctx, e) => _showAnnTip(tipText, e.native || e),
+      leave: () => _hideAnnTip(),
     };
   }
   return ann;
@@ -1697,6 +1707,30 @@ const LEGEND_TIPS = {
   'MACD(当月推定)':       '今月末まで株価が変わらなかったと仮定して計算したMACD線の参考値です。',
   'シグナル(当月推定)':   '今月末まで株価が変わらなかったと仮定して計算したシグナル線の参考値です。',
 };
+
+// アノテーション吹き出し
+function _showAnnTip(text, nativeEvent) {
+  let el = document.getElementById('ann-hover-tip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ann-hover-tip';
+    el.style.cssText = 'position:fixed;z-index:9999;background:#1c2128;color:#e6edf3;'
+      + 'border:1px solid #444c56;border-radius:8px;padding:10px 12px;font-size:11px;'
+      + 'line-height:1.6;max-width:280px;pointer-events:none;display:none;'
+      + 'box-shadow:0 4px 16px rgba(0,0,0,.5)';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.style.display = 'block';
+  if (nativeEvent) {
+    el.style.left = Math.min(nativeEvent.clientX + 14, window.innerWidth - 295) + 'px';
+    el.style.top  = (nativeEvent.clientY - 10) + 'px';
+  }
+}
+function _hideAnnTip() {
+  const el = document.getElementById('ann-hover-tip');
+  if (el) el.style.display = 'none';
+}
 
 function _getLegendTipEl() {
   let el = document.getElementById('legend-hover-tip');
@@ -1859,6 +1893,9 @@ function drawCharts(data) {
       const nearWeekly = weeklyCrossGc !== null;
       const estPosition = nearWeekly ? (estGc ? 'start' : 'end') : (estGc ? 'end' : 'start');
       const estYAdj = nearWeekly ? (estGc ? 30 : -30) : (estGc ? -2 : 2);
+      const estTip = estGc
+        ? `【買い予測（${estMonthLabel || '当月'}推定）】株価が現在値のまま月末まで推移した場合、MACD線がシグナル線を上抜く見込みです。実際の値動き次第で変わります。`
+        : `【売り予測（${estMonthLabel || '当月'}推定）】株価が現在値のまま月末まで推移した場合、MACD線がシグナル線を下抜く見込みです。実際の値動き次第で変わります。`;
       dividerAnnotation.estimateSignal = {
         type: 'line', xMin: crossDate, xMax: crossDate,
         borderColor: estColor + '55', borderWidth: 1.5, borderDash: [1, 3],
@@ -1869,6 +1906,8 @@ function drawCharts(data) {
           color: '#000', font: { size: 10, weight: 700 },
           padding: { x: 6, y: 3 }, borderRadius: 4,
           yAdjust: estYAdj },
+        enter: (ctx, e) => _showAnnTip(estTip, e.native || e),
+        leave: () => _hideAnnTip(),
       };
     }
   }
