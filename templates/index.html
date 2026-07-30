@@ -1865,6 +1865,35 @@ function drawCharts(data) {
   const toISO = d => (d && d.length === 7) ? d + '-01' : d;
   const dates = rawDates.map(toISO);
 
+  // MACD未計算区間（EMAウォームアップ中）の説明表示
+  // 月足データの合計本数がMACD(26ヶ月)+シグナルのウォームアップに満たない場合、
+  // 表示期間の先頭側にMACD/シグナルが計算できない空白ができるため注記を出す
+  let dataGapAnnotation = {};
+  {
+    const firstValidIdx = macd.findIndex(v => v != null);
+    if (firstValidIdx > 0 && dates.length > 0) {
+      const totalMonths = data.chart.dates.length;
+      const fullFirst = data.chart.dates[0];
+      const fullLast = data.chart.dates[data.chart.dates.length - 1];
+      dataGapAnnotation = {
+        macdGap: {
+          type: 'box',
+          xMin: dates[0], xMax: dates[firstValidIdx],
+          backgroundColor: 'rgba(139,148,158,.05)',
+          borderWidth: 0,
+          label: {
+            display: true,
+            content: [`月足データが${fullFirst}〜${fullLast}の`, `${totalMonths}ヶ月分しかないため、表示不可`],
+            position: 'center',
+            color: '#8b949e',
+            font: { size: 11, weight: 600 },
+            backgroundColor: 'transparent',
+          },
+        },
+      };
+    }
+  }
+
   // 直近1ヶ月分の週足データを「月足の本当の最終点」の後ろに追加する
   let mDates = dates, mClose = close, mHist = histogram, mMacd = macd, mSignal = signal;
   let weeklyClose = null, weeklyHist = null, weeklyMacd = null, weeklySig = null, weeklyStartIdx = -1;
@@ -2086,7 +2115,7 @@ function drawCharts(data) {
       tooltip: { ...BOPTS.plugins.tooltip, callbacks: {
         title: items => items.length ? items[0].label + (items[0].dataIndex === estimateStartIdx ? `（${estMonthLabel || '当月'}推定）` : '') : '',
         label: ctx => ctx.dataset.label ? ` ${ctx.dataset.label}: ${Number(ctx.raw).toFixed(4)}` : null }},
-      annotation: { annotations: { ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal, weeklyStartIdx, estimateStartIdx, estMonthLabel), ...dividerAnnotation } },
+      annotation: { annotations: { ...dataGapAnnotation, ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal, weeklyStartIdx, estimateStartIdx, estMonthLabel), ...dividerAnnotation } },
       zoom: {
         zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },
