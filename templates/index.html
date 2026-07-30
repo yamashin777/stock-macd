@@ -391,6 +391,14 @@ header {
   50%  { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
+.sig-period-toggle { display:inline-flex; gap:2px; margin:0 3px; vertical-align:middle; }
+.sig-period-btn {
+  font: inherit; font-size: 10px; font-weight: 700; line-height: 1;
+  padding: 2px 6px; border-radius: 5px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--muted); cursor: pointer; transition: all .12s;
+}
+.sig-period-btn:hover  { border-color: var(--blue); color: var(--text); }
+.sig-period-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; cursor: default; }
 .card-memo { font-size:11px; color:var(--muted); line-height:1.4; margin-top:2px;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .btn-edit { background:none; border:none; color:var(--muted); cursor:pointer;
@@ -1400,9 +1408,16 @@ function recalcMacd(closes, signalPeriod, fast = 12, slow = 26) {
   return { macd, signal, histogram };
 }
 
-function toggleSignalPeriod() {
-  if (!detailData) return;
-  currentSignalPeriod = currentSignalPeriod === 4 ? 9 : 4;
+// MACDシグナル期間トグルのHTML（ヘッダー・チャート見出しの両方から呼ぶ）
+function sigPeriodToggleHtml() {
+  const btn = n => `<button type="button" class="sig-period-btn ${currentSignalPeriod === n ? 'active' : ''}"
+    onclick="event.stopPropagation();setSignalPeriod(${n})">${n}</button>`;
+  return `MACD (12,26,<span class="sig-period-toggle" title="シグナル期間を切り替え">${btn(4)}${btn(9)}</span>)`;
+}
+
+function setSignalPeriod(n) {
+  if (!detailData || currentSignalPeriod === n) return;
+  currentSignalPeriod = n;
   const { macd, signal, histogram } = recalcMacd(detailData.chart.close, currentSignalPeriod);
   detailData.chart.macd = macd;
   detailData.chart.signal = signal;
@@ -1413,8 +1428,9 @@ function toggleSignalPeriod() {
   detailData.signal_value = lastValid(signal);
   detailData.histogram_value = lastValid(histogram);
 
-  document.querySelectorAll('.macd-period-label').forEach(el => {
-    el.textContent = el.textContent.replace(/12,\s*26,\s*\d+/, `12,26,${currentSignalPeriod}`);
+  document.querySelectorAll('.sig-period-toggle').forEach(el => {
+    el.innerHTML = [4, 9].map(p => `<button type="button" class="sig-period-btn ${currentSignalPeriod === p ? 'active' : ''}"
+      onclick="event.stopPropagation();setSignalPeriod(${p})">${p}</button>`).join('');
   });
   const macdEl = document.getElementById('stat-macd-val');
   if (macdEl) {
@@ -1456,7 +1472,7 @@ function renderDetail(data) {
     <div class="detail-hd">
       <div class="detail-left">
         <div class="d-name">${escapeHtml(displayName)}<a class="ext-link" href="${detailExtUrl}" target="_blank" rel="noopener noreferrer" title="外部サイトで開く">↗</a></div>
-        <div class="d-meta">${data.symbol} ｜ 月足 <span class="macd-period-label" onclick="toggleSignalPeriod()" title="クリックでシグナル期間を切替(4⇔9)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px">MACD (12,26,${currentSignalPeriod})</span> ｜ 更新: ${data.updated_at}</div>
+        <div class="d-meta">${data.symbol} ｜ 月足 ${sigPeriodToggleHtml()} ｜ 更新: ${data.updated_at}</div>
         <div class="d-sig">
           <span class="badge ${cfg.cls}" style="font-size:13px;padding:5px 14px">${cfg.lbl}</span>
           ${data.sector ? `<span class="card-sector" style="margin-left:8px;vertical-align:middle">${escapeHtml(data.sector)}</span>` : ''}
@@ -1550,7 +1566,7 @@ function renderDetail(data) {
       <div class="ch-price"><canvas id="priceChart"></canvas></div>
     </div>
     <div class="chart-box">
-      <div class="chart-lbl"><span class="macd-period-label" onclick="toggleSignalPeriod()" title="クリックでシグナル期間を切替(4⇔9)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px">MACD (12,26,${currentSignalPeriod})</span> — 青:MACD線　橙:シグナル線　棒:ヒストグラム</div>
+      <div class="chart-lbl">${sigPeriodToggleHtml()} — 青:MACD線　橙:シグナル線　棒:ヒストグラム</div>
       <div class="ch-macd"><canvas id="macdChart"></canvas></div>
     </div>
 
@@ -1871,14 +1887,16 @@ function drawCharts(data) {
   let dataGapAnnotation = {};
   {
     const firstValidIdx = macd.findIndex(v => v != null);
-    if (firstValidIdx > 0 && dates.length > 0) {
+    const hasAnyValid = firstValidIdx !== -1;
+    if ((!hasAnyValid || firstValidIdx > 0) && dates.length > 0) {
       const totalMonths = data.chart.dates.length;
       const fullFirst = data.chart.dates[0];
       const fullLast = data.chart.dates[data.chart.dates.length - 1];
+      const gapEndDate = hasAnyValid ? dates[firstValidIdx] : dates[dates.length - 1];
       dataGapAnnotation = {
         macdGap: {
           type: 'box',
-          xMin: dates[0], xMax: dates[firstValidIdx],
+          xMin: dates[0], xMax: gapEndDate,
           backgroundColor: 'rgba(139,148,158,.05)',
           borderWidth: 0,
           label: {
