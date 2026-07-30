@@ -1036,6 +1036,7 @@ let active         = null;
 let priceChart     = null;
 let macdChart      = null;
 let currentPeriod  = 12;   // months shown in detail charts (default 1 year)
+let currentSignalPeriod = 4;  // MACDシグナル期間(4 or 9)。カードを開くたびに4にリセット
 let detailData     = null;  // full data of currently shown stock
 let modalTicker    = null;  // ticker currently being edited in modal
 let sortableInst   = null;  // SortableJS instance
@@ -1366,11 +1367,72 @@ function destroyCharts() {
   if (macdChart)  { macdChart.destroy();  macdChart  = null; }
 }
 
+// ── MACDシグナル期間の切り替え（サーバー再取得なしでクライアント側が瞬時に再計算） ──
+// pandas の ewm(span=N, min_periods=N, adjust=False) と同じ計算（NaN/nullは無視して継続）
+function ewmSeries(values, span, minPeriods) {
+  const alpha = 2 / (span + 1);
+  const result = new Array(values.length).fill(null);
+  let prev = null, count = 0;
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v == null) continue;
+    prev = (prev === null) ? v : alpha * v + (1 - alpha) * prev;
+    count++;
+    if (count >= minPeriods) result[i] = prev;
+  }
+  return result;
+}
+
+function recalcMacd(closes, signalPeriod, fast = 12, slow = 26) {
+  const emaFast = ewmSeries(closes, fast, fast);
+  const emaSlow = ewmSeries(closes, slow, slow);
+  const macd = closes.map((_, i) => (emaFast[i] != null && emaSlow[i] != null) ? emaFast[i] - emaSlow[i] : null);
+  const signal = ewmSeries(macd, signalPeriod, signalPeriod);
+  const histogram = macd.map((m, i) => (m != null && signal[i] != null) ? m - signal[i] : null);
+  return { macd, signal, histogram };
+}
+
+function toggleSignalPeriod() {
+  if (!detailData) return;
+  currentSignalPeriod = currentSignalPeriod === 4 ? 9 : 4;
+  const { macd, signal, histogram } = recalcMacd(detailData.chart.close, currentSignalPeriod);
+  detailData.chart.macd = macd;
+  detailData.chart.signal = signal;
+  detailData.chart.histogram = histogram;
+
+  const lastValid = arr => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) return arr[i]; return 0; };
+  detailData.macd_value = lastValid(macd);
+  detailData.signal_value = lastValid(signal);
+  detailData.histogram_value = lastValid(histogram);
+
+  document.querySelectorAll('.macd-period-label').forEach(el => {
+    el.textContent = el.textContent.replace(/12,\s*26,\s*\d+/, `12,26,${currentSignalPeriod}`);
+  });
+  const macdEl = document.getElementById('stat-macd-val');
+  if (macdEl) {
+    macdEl.textContent = (detailData.macd_value >= 0 ? '+' : '') + detailData.macd_value.toFixed(4);
+    macdEl.classList.toggle('pos', detailData.macd_value >= 0);
+    macdEl.classList.toggle('neg', detailData.macd_value < 0);
+  }
+  const sigEl = document.getElementById('stat-signal-val');
+  if (sigEl) sigEl.textContent = detailData.signal_value.toFixed(4);
+  const histEl = document.getElementById('stat-histogram-val');
+  if (histEl) {
+    histEl.textContent = (detailData.histogram_value >= 0 ? '+' : '') + detailData.histogram_value.toFixed(4);
+    histEl.classList.toggle('pos', detailData.histogram_value >= 0);
+    histEl.classList.toggle('neg', detailData.histogram_value < 0);
+  }
+
+  destroyCharts();
+  drawCharts(detailData);
+}
+
 // ── Detail panel ───────────────────────────────────────────────────────────
 function renderDetail(data) {
   destroyCharts();
   detailData    = data;
   currentPeriod = 12;
+  currentSignalPeriod = 4;
   const s           = sym(data.currency);
   const cfg         = sigCfg(data.signal);
   const sgn         = data.change >= 0 ? '+' : '';
@@ -1386,7 +1448,7 @@ function renderDetail(data) {
     <div class="detail-hd">
       <div class="detail-left">
         <div class="d-name">${escapeHtml(displayName)}<a class="ext-link" href="${detailExtUrl}" target="_blank" rel="noopener noreferrer" title="外部サイトで開く">↗</a></div>
-        <div class="d-meta">${data.symbol} ｜ 月足 MACD (12,26,4) ｜ 更新: ${data.updated_at}</div>
+        <div class="d-meta">${data.symbol} ｜ 月足 <span class="macd-period-label" onclick="toggleSignalPeriod()" title="クリックでシグナル期間を切替(4⇔9)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px">MACD (12,26,${currentSignalPeriod})</span> ｜ 更新: ${data.updated_at}</div>
         <div class="d-sig">
           <span class="badge ${cfg.cls}" style="font-size:13px;padding:5px 14px">${cfg.lbl}</span>
           ${data.sector ? `<span class="card-sector" style="margin-left:8px;vertical-align:middle">${escapeHtml(data.sector)}</span>` : ''}
@@ -1406,11 +1468,11 @@ function renderDetail(data) {
 
     <div class="stats">
       <div class="stat"><div class="stat-lbl">MACD</div>
-        <div class="stat-val ${mc}">${data.macd_value >= 0 ? '+' : ''}${data.macd_value.toFixed(4)}</div></div>
+        <div class="stat-val ${mc}" id="stat-macd-val">${data.macd_value >= 0 ? '+' : ''}${data.macd_value.toFixed(4)}</div></div>
       <div class="stat"><div class="stat-lbl">シグナル</div>
-        <div class="stat-val">${data.signal_value.toFixed(4)}</div></div>
+        <div class="stat-val" id="stat-signal-val">${data.signal_value.toFixed(4)}</div></div>
       <div class="stat"><div class="stat-lbl">ヒストグラム</div>
-        <div class="stat-val ${hc}">${data.histogram_value >= 0 ? '+' : ''}${data.histogram_value.toFixed(4)}</div></div>
+        <div class="stat-val ${hc}" id="stat-histogram-val">${data.histogram_value >= 0 ? '+' : ''}${data.histogram_value.toFixed(4)}</div></div>
       ${(() => {
         if (!data.next_earnings) return '';
         const today = new Date(); today.setHours(0,0,0,0);
@@ -1480,7 +1542,7 @@ function renderDetail(data) {
       <div class="ch-price"><canvas id="priceChart"></canvas></div>
     </div>
     <div class="chart-box">
-      <div class="chart-lbl">MACD (12,26,4) — 青:MACD線　橙:シグナル線　棒:ヒストグラム</div>
+      <div class="chart-lbl"><span class="macd-period-label" onclick="toggleSignalPeriod()" title="クリックでシグナル期間を切替(4⇔9)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px">MACD (12,26,${currentSignalPeriod})</span> — 青:MACD線　橙:シグナル線　棒:ヒストグラム</div>
       <div class="ch-macd"><canvas id="macdChart"></canvas></div>
     </div>
 
