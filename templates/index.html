@@ -1103,11 +1103,20 @@ function isEarlySignal(d) {
   return wDir !== mDir;                  // 方向が食い違っていれば早期シグナル
 }
 
+/** 週足早期シグナルの判定日が、当月の週足データの何週目に当たるかを返す（1始まり、不明ならnull） */
+function weekNumberInMonth(data) {
+  const wr = data.weekly_recent;
+  if (!wr || !wr.dates || !wr.dates.length || !data.weekly_signal_date) return null;
+  const idx = wr.dates.indexOf(data.weekly_signal_date);
+  return idx === -1 ? null : idx + 1;
+}
+
 /** 週足MACDによる早期シグナル（月足の買い/売り確定前に方向の食い違いを検知）を表示するHTMLを生成 */
 function earlySignalHtml(data) {
   if (!isEarlySignal(data)) return '';
   const wcfg = sigCfg(data.weekly_signal);
-  const dateStr = data.weekly_signal_date ? ` (${data.weekly_signal_date})` : '';
+  const wn = weekNumberInMonth(data);
+  const dateStr = data.weekly_signal_date ? ` (${wn ? wn + '週目: ' : ''}${data.weekly_signal_date})` : '';
   return `<div class="early-signal-box ${earlyDirClass(data)}">
     <span class="early-signal-tag">⚡ 早期シグナル検知</span>
     <span style="font-size:11px;color:#fff;opacity:.9">月足確定前に週足MACDで動きを検知しました</span><br>
@@ -1324,7 +1333,10 @@ function cardHTML(t, d, i) {
   let earlyBadgeHtml = '';
   if (isEarlySignal(d)) {
     const wcfg = sigCfg(d.weekly_signal);
-    earlyBadgeHtml = `<span class="early-mini-badge ${earlyDirClass(d)}" title="週足MACDでは月足と逆方向の動き（${escapeHtml(d.weekly_signal)}）を検知">⚡週足:${wcfg.lbl}</span>`;
+    const wn = weekNumberInMonth(d);
+    const wnTitle = wn ? `（${wn}週目: ${d.weekly_signal_date}）` : '';
+    const wnBadge = wn ? ` ・${wn}週目` : '';
+    earlyBadgeHtml = `<span class="early-mini-badge ${earlyDirClass(d)}" title="週足MACDでは月足と逆方向の動き（${escapeHtml(d.weekly_signal)}）を検知${wnTitle}">⚡週足:${wcfg.lbl}${wnBadge}</span>`;
   }
 
   return `<div class="card${act}${mktClass}${sigClass}" id="card-${t}" onclick="selectCard('${t}')">
@@ -2623,7 +2635,10 @@ function renderScanView() {
     let earlyBadge = '';
     if (isEarlySignal(d)) {
       const wcfg = sigCfg(d.weekly_signal);
-      earlyBadge = `<span class="early-mini-badge ${earlyDirClass(d)}" title="週足MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知">⚡週足:${wcfg.lbl}</span>`;
+      const wn = weekNumberInMonth(d);
+      const wnStr = wn ? `（${wn}週目: ${d.weekly_signal_date}）` : '';
+      const wnBadge = wn ? ` ・${wn}週目` : '';
+      earlyBadge = `<span class="early-mini-badge ${earlyDirClass(d)}" title="週足MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知${wnStr}">⚡週足:${wcfg.lbl}${wnBadge}</span>`;
     }
 
     // 次回決算日までの日数
@@ -3076,7 +3091,10 @@ function _renderDiscResults(data) {
     let earlyBadge = '';
     if (isEarlySignal(d)) {
       const wcfg = sigCfg(d.weekly_signal);
-      earlyBadge = `<span class="early-mini-badge ${earlyDirClass(d)}" title="週足MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知">⚡週足:${wcfg.lbl}</span>`;
+      const wn = weekNumberInMonth(d);
+      const wnStr = wn ? `（${wn}週目: ${d.weekly_signal_date}）` : '';
+      const wnBadge = wn ? ` ・${wn}週目` : '';
+      earlyBadge = `<span class="early-mini-badge ${earlyDirClass(d)}" title="週足MACDでは月足と異なる動き（${escapeHtml(d.weekly_signal)}）を検知${wnStr}">⚡週足:${wcfg.lbl}${wnBadge}</span>`;
     }
     return `<div class="disc-row">
       <div style="flex:1 1 130px">
@@ -3254,7 +3272,8 @@ function renderSignalView() {
     let earlyCell = '<span class="sig-date-none">—</span>';
     if (isEarlySignal(d)) {
       const wcfg = sigCfg(d.weekly_signal);
-      const wdate = d.weekly_signal_date ? `<br><span style="font-size:10px;color:var(--muted)">${d.weekly_signal_date}</span>` : '';
+      const wn = weekNumberInMonth(d);
+      const wdate = d.weekly_signal_date ? `<br><span style="font-size:10px;color:var(--muted)">${wn ? wn + '週目 ' : ''}${d.weekly_signal_date}</span>` : '';
       earlyCell = `<span class="early-mini-badge ${earlyDirClass(d)}" title="週足MACDでは月足と逆方向の動きを検知">⚡ ${wcfg.lbl}</span>${wdate}`;
     }
 
