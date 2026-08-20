@@ -1019,7 +1019,7 @@ def fetch_stock_data(ticker: str) -> dict:
     ).dropna(subset=['Close'])
 
     name = symbol
-    currency = 'USD'
+    currency = 'JPY' if symbol.endswith('.T') else 'USD'
     current_price = float(hist['Close'].iloc[-1])
     prev_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else current_price
     sector_yf = ''
