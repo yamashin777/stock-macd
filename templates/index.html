@@ -1111,6 +1111,26 @@ function weekNumberInMonth(data) {
   return idx === -1 ? null : idx + 1;
 }
 
+/**
+ * 「〇月推定」の買い/売り判定を、app.py側の月足基準の判定ではなく、
+ * チャートに実際に描画されている「週足最終値→推定値」の2点だけで算出する。
+ * こうすることでヘッダーの推定バッジとチャートの推定クロス表示が食い違わなくなる。
+ */
+function localNextMonthSignal(data) {
+  if (!data.next_month_label || data.next_month_macd == null || data.next_month_signal_val == null) return null;
+  const wr = data.weekly_recent;
+  const bMacd = (wr && wr.macd && wr.macd.length) ? wr.macd[wr.macd.length - 1] : data.macd_value;
+  const bSig  = (wr && wr.signal && wr.signal.length) ? wr.signal[wr.signal.length - 1] : data.signal_value;
+  if (bMacd == null || bSig == null) return null;
+  const y0 = bMacd - bSig;
+  const y1 = data.next_month_macd - data.next_month_signal_val;
+  if (y0 <= 0 && y1 > 0) return { type: 'buy',     label: '買い' };
+  if (y0 >= 0 && y1 < 0) return { type: 'sell',    label: '売り' };
+  if (y1 > 0)            return { type: 'bullish', label: '上昇トレンド' };
+  if (y1 < 0)            return { type: 'bearish', label: '下降トレンド' };
+  return { type: 'neutral', label: '様子見' };
+}
+
 /** 週足MACDによる早期シグナル（月足の買い/売り確定前に方向の食い違いを検知）を表示するHTMLを生成 */
 function earlySignalHtml(data) {
   if (!isEarlySignal(data)) return '';
@@ -1521,8 +1541,9 @@ function renderDetail(data) {
           <div class="stat-val"><span class="${cls}">${label}</span> <span style="font-size:11px;color:var(--muted)">${escapeHtml(data.next_earnings.slice(5))}</span></div></div>`;
       })()}
       ${(() => {
-        if (data.next_month_signal_type == null) return '';
-        const nmCfg = sigCfg(data.next_month_signal);
+        const nmLocal = localNextMonthSignal(data);
+        if (!nmLocal) return '';
+        const nmCfg = sigCfg(nmLocal.label);
         const baseDate = data.updated_at ? data.updated_at.slice(0, 10) : '';
         const nmLabel = data.next_month_label || '';
         const nmMonth = nmLabel ? parseInt(nmLabel.split('-')[1]) + '月' : '当月';
