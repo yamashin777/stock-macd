@@ -293,8 +293,6 @@ header {
 .ch-price { height: 230px; position: relative; }
 .ch-macd  { height: 165px; position: relative; }
 .ch-rsi   { height: 140px; position: relative; margin-top: 4px; }
-.rsi-toggle-lbl { cursor: pointer; user-select: none; }
-.rsi-toggle-lbl:hover { color: var(--blue); }
 
 .period-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
 .period-lbl { font-size: 11px; color: var(--muted); margin-right: 2px; }
@@ -1053,7 +1051,6 @@ let active         = null;
 let priceChart     = null;
 let macdChart      = null;
 let rsiChart       = null;
-let rsiVisible     = false;  // RSIパネルの開閉状態（カードを開くたびに閉じた状態にリセット）
 let currentPeriod  = 12;   // months shown in detail charts (default 1 year)
 let currentSignalPeriod = 4;  // MACDシグナル期間(4 or 9)。カードを開くたびに4にリセット
 let detailData     = null;  // full data of currently shown stock
@@ -1173,11 +1170,7 @@ function applyPeriod(months) {
   document.querySelectorAll('.pbtn').forEach(b =>
     b.classList.toggle('on', +b.dataset.m === months)
   );
-  if (detailData) { destroyCharts(); drawCharts(detailData); redrawRsiIfVisible(); }
-}
-
-function redrawRsiIfVisible() {
-  if (rsiVisible && detailData) drawRsiChart(detailData);
+  if (detailData) { destroyCharts(); drawCharts(detailData); }
 }
 
 function fmtPrice(p, cur) {
@@ -1427,15 +1420,6 @@ function destroyCharts() {
   if (rsiChart)   { rsiChart.destroy();   rsiChart   = null; }
 }
 
-function toggleRsiChart() {
-  rsiVisible = !rsiVisible;
-  const wrap = document.getElementById('rsi-chart-wrap');
-  const icon = document.getElementById('rsi-toggle-icon');
-  if (wrap) wrap.style.display = rsiVisible ? 'block' : 'none';
-  if (icon) icon.textContent = rsiVisible ? '▾' : '▸';
-  if (rsiVisible && !rsiChart && detailData) drawRsiChart(detailData);
-}
-
 function drawRsiChart(data) {
   const { dates: rawDates, rsi } = getSlice(data.chart, currentPeriod);
   if (!rsi || !rsi.length) return;
@@ -1542,13 +1526,11 @@ function setSignalPeriod(n) {
 
   destroyCharts();
   drawCharts(detailData);
-  redrawRsiIfVisible();
 }
 
 // ── Detail panel ───────────────────────────────────────────────────────────
 function renderDetail(data) {
   destroyCharts();
-  rsiVisible    = false;
   detailData    = data;
   currentPeriod = 12;
   currentSignalPeriod = 4;
@@ -1666,10 +1648,8 @@ function renderDetail(data) {
       <div class="ch-macd"><canvas id="macdChart"></canvas></div>
     </div>
     <div class="chart-box">
-      <div class="chart-lbl rsi-toggle-lbl" onclick="toggleRsiChart()">
-        <span id="rsi-toggle-icon">▸</span> RSI (14) <span style="font-size:10px;color:var(--muted);font-weight:400">クリックで表示・買われすぎ/売られすぎの目安</span>
-      </div>
-      <div class="ch-rsi" id="rsi-chart-wrap" style="display:none"><canvas id="rsiChart"></canvas></div>
+      <div class="chart-lbl">RSI (14) <span style="font-size:10px;color:var(--muted);font-weight:400">買われすぎ/売られすぎの目安</span></div>
+      <div class="ch-rsi" id="rsi-chart-wrap"><canvas id="rsiChart"></canvas></div>
     </div>
 
     <div class="news-section" id="news-section">
@@ -2245,6 +2225,8 @@ function drawCharts(data) {
       },
     }},
   });
+
+  drawRsiChart(data);
 }
 
 // ── Add / Remove / Refresh ─────────────────────────────────────────────────
