@@ -1176,6 +1176,7 @@ def fetch_stock_data(ticker: str) -> dict:
         'macd_value': _last(macd),
         'signal_value': _last(sig),
         'histogram_value': _last(hist_vals),
+        'rsi_value': _last(rsi),
         'last_gc': last_gc,
         'last_dc': last_dc,
         'sector': sector,

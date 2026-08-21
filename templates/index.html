@@ -1777,16 +1777,41 @@ async function fetchNews(ticker) {
 }
 
 // ── Zoom helpers ───────────────────────────────────────────────────────────
+const PERIOD_STEPS = [12, 36, 60, 120];  // 1年/3年/5年/10年
+
 function syncChartZoom(source) {
-  const target = source === priceChart ? macdChart : priceChart;
-  if (!target) return;
   const { min, max } = source.scales.x;
-  target.zoomScale('x', { min, max }, 'none');
+  if (maybeExtendPeriod(min, max)) return;  // 期間を拡張した場合はそちらで再描画済み
+  [priceChart, macdChart, rsiChart].forEach(target => {
+    if (target && target !== source) target.zoomScale('x', { min, max }, 'none');
+  });
+}
+
+// ズームアウトで表示範囲の左端が読み込み済みデータの先頭に達したら、
+// 自動的に表示期間を1段階拡張し（1年→3年→5年→10年）、同じ表示範囲を維持したまま再描画する
+function maybeExtendPeriod(min, max) {
+  if (!detailData) return false;
+  const idx = PERIOD_STEPS.indexOf(currentPeriod);
+  if (idx === -1 || idx >= PERIOD_STEPS.length - 1) return false;
+  const slice = getSlice(detailData.chart, currentPeriod);
+  if (!slice.dates.length) return false;
+  const toISO = d => (d && d.length === 7) ? d + '-01' : d;
+  const firstLoaded = new Date(toISO(slice.dates[0])).getTime();
+  if (min > firstLoaded) return false;
+
+  applyPeriod(PERIOD_STEPS[idx + 1]);
+  // 再生成直後のチャートはレイアウト確定前だとズーム範囲の計算がずれるため、
+  // 少し待ってから同期する（バックグラウンドタブでも確実に発火するsetTimeoutを使用）
+  setTimeout(() => {
+    [priceChart, macdChart, rsiChart].forEach(c => c && c.zoomScale('x', { min, max }, 'none'));
+  }, 50);
+  return true;
 }
 
 function resetZoom() {
   if (priceChart) priceChart.resetZoom();
   if (macdChart)  macdChart.resetZoom();
+  if (rsiChart)   rsiChart.resetZoom();
 }
 
 // ── MACD signal annotation builder ────────────────────────────────────────
@@ -3288,6 +3313,14 @@ async function discAddToScan(e, ticker) {
 }
 
 // ── シグナル履歴ビュー ──────────────────────────────────────────────────────
+/** RSI値から「買われすぎ(≥70)」「売られすぎ(≤30)」のバッジHTMLを生成。中間値は数値のみ表示 */
+function rsiStatusHtml(v) {
+  if (v == null) return '<span class="sig-date-none">—</span>';
+  if (v >= 70) return `<span class="badge sig-sell" style="font-size:10px;padding:2px 8px" title="RSI ${v.toFixed(1)}">買われすぎ ${v.toFixed(1)}</span>`;
+  if (v <= 30) return `<span class="badge sig-buy" style="font-size:10px;padding:2px 8px" title="RSI ${v.toFixed(1)}">売られすぎ ${v.toFixed(1)}</span>`;
+  return `<span style="font-size:11px;color:var(--muted)">${v.toFixed(1)}</span>`;
+}
+
 function monthsAgo(ym) {
   if (!ym) return null;
   const [y, m] = ym.split('-').map(Number);
@@ -3349,6 +3382,8 @@ function renderSignalView() {
       earlyCell = `<span class="early-mini-badge ${earlyDirClass(d)}" title="週足MACDでは月足と逆方向の動きを検知">⚡ ${wcfg.lbl}</span>${wdate}`;
     }
 
+    const rsiCell = rsiStatusHtml(d.rsi_value);
+
     return `<tr onclick="switchTab('watch'); setTimeout(()=>selectCard('${d.ticker}'),100)">
       <td>
         <div class="sig-name">
@@ -3362,6 +3397,7 @@ function renderSignalView() {
       <td>${gcCell}</td>
       <td>${dcCell}</td>
       <td>${earlyCell}</td>
+      <td>${rsiCell}</td>
     </tr>`;
   }
 
@@ -3373,7 +3409,7 @@ function renderSignalView() {
       <table class="sig-table">
         <thead><tr>
           <th>銘柄</th><th>現在シグナル</th><th>現在値</th>
-          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th>
+          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th><th>RSI(14)</th>
         </tr></thead>
         <tbody>${recentGC.map(rowHTML).join('')}</tbody>
       </table>
@@ -3386,7 +3422,7 @@ function renderSignalView() {
       <table class="sig-table">
         <thead><tr>
           <th>銘柄</th><th>現在シグナル</th><th>現在値</th>
-          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th>
+          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th><th>RSI(14)</th>
         </tr></thead>
         <tbody>${others.map(rowHTML).join('')}</tbody>
       </table>
