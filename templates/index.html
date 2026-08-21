@@ -3382,8 +3382,6 @@ function renderSignalView() {
       earlyCell = `<span class="early-mini-badge ${earlyDirClass(d)}" title="週足MACDでは月足と逆方向の動きを検知">⚡ ${wcfg.lbl}</span>${wdate}`;
     }
 
-    const rsiCell = rsiStatusHtml(d.rsi_value);
-
     return `<tr onclick="switchTab('watch'); setTimeout(()=>selectCard('${d.ticker}'),100)">
       <td>
         <div class="sig-name">
@@ -3397,9 +3395,35 @@ function renderSignalView() {
       <td>${gcCell}</td>
       <td>${dcCell}</td>
       <td>${earlyCell}</td>
-      <td>${rsiCell}</td>
     </tr>`;
   }
+
+  function rsiRowHTML(d) {
+    const s = sym(d.currency);
+    const cc = d.change >= 0 ? 'pos' : 'neg';
+    const sgn = d.change >= 0 ? '+' : '';
+    const displayName = (d.custom_name && d.custom_name.trim()) ? d.custom_name : d.name;
+    const extUrl = externalUrl(d.symbol, d.ticker);
+    return `<tr onclick="switchTab('watch'); setTimeout(()=>selectCard('${d.ticker}'),100)">
+      <td>
+        <div class="sig-name">
+          <a class="ext-link" style="font-size:11px;margin-right:4px" href="${extUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">↗</a>
+          ${escapeHtml(displayName)}
+        </div>
+        <div class="sig-ticker">${d.ticker}</div>
+      </td>
+      <td>${rsiStatusHtml(d.rsi_value)}</td>
+      <td class="sig-price">${s}${fmtPrice(d.current_price, d.currency)}<br><span class="${cc}" style="font-size:11px">${sgn}${d.change_pct.toFixed(2)}%</span></td>
+    </tr>`;
+  }
+
+  // 現在RSIが買われすぎ(≥70)・売られすぎ(≤30)の銘柄（買われすぎ→RSI高い順、売られすぎ→RSI低い順）
+  const rsiAlert = sorted.filter(d => d.rsi_value != null && (d.rsi_value >= 70 || d.rsi_value <= 30));
+  rsiAlert.sort((a, b) => {
+    const aOB = a.rsi_value >= 70, bOB = b.rsi_value >= 70;
+    if (aOB !== bOB) return aOB ? -1 : 1;
+    return aOB ? b.rsi_value - a.rsi_value : a.rsi_value - b.rsi_value;
+  });
 
   let html = '';
 
@@ -3409,9 +3433,19 @@ function renderSignalView() {
       <table class="sig-table">
         <thead><tr>
           <th>銘柄</th><th>現在シグナル</th><th>現在値</th>
-          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th><th>RSI(14)</th>
+          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th>
         </tr></thead>
         <tbody>${recentGC.map(rowHTML).join('')}</tbody>
+      </table>
+    </div>`;
+  }
+
+  if (rsiAlert.length) {
+    html += `<div class="sig-section">
+      <div class="sig-section-title">⚡ RSI 買われすぎ・売られすぎ (${rsiAlert.length}銘柄)</div>
+      <table class="sig-table">
+        <thead><tr><th>銘柄</th><th>RSI(14)</th><th>現在値</th></tr></thead>
+        <tbody>${rsiAlert.map(rsiRowHTML).join('')}</tbody>
       </table>
     </div>`;
   }
@@ -3422,7 +3456,7 @@ function renderSignalView() {
       <table class="sig-table">
         <thead><tr>
           <th>銘柄</th><th>現在シグナル</th><th>現在値</th>
-          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th><th>RSI(14)</th>
+          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th>
         </tr></thead>
         <tbody>${others.map(rowHTML).join('')}</tbody>
       </table>
