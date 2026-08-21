@@ -1129,6 +1129,23 @@ def fetch_stock_data(ticker: str) -> dict:
         elif pm >= ps and cm < cs:
             last_dc = common[i].strftime('%Y-%m')
 
+    # RSIが現在「買われすぎ(≥70)」「売られすぎ(≤30)」の場合、その状態が何月から
+    # 連続して続いているか（＝閾値を跨いだ時期）を検出する
+    def _rsi_streak_start(series, in_zone):
+        valid = series.dropna()
+        if valid.empty or not in_zone(float(valid.iloc[-1])):
+            return None
+        start = valid.index[-1]
+        for i in range(len(valid) - 2, -1, -1):
+            if in_zone(float(valid.iloc[i])):
+                start = valid.index[i]
+            else:
+                break
+        return start.strftime('%Y-%m')
+
+    rsi_overbought_since = _rsi_streak_start(rsi, lambda v: v >= 70)
+    rsi_oversold_since   = _rsi_streak_start(rsi, lambda v: v <= 30)
+
     # セクター: DISC_SECTORS優先（日本語）、なければ yfinance から翻訳して取得
     disp_t = display_ticker(symbol)
     sector = DISC_SECTORS.get(disp_t, '') or _YF_SECTOR_JA.get(sector_yf, sector_yf)
@@ -1177,6 +1194,8 @@ def fetch_stock_data(ticker: str) -> dict:
         'signal_value': _last(sig),
         'histogram_value': _last(hist_vals),
         'rsi_value': _last(rsi),
+        'rsi_overbought_since': rsi_overbought_since,
+        'rsi_oversold_since':   rsi_oversold_since,
         'last_gc': last_gc,
         'last_dc': last_dc,
         'sector': sector,
@@ -2196,6 +2215,27 @@ def search_ticker():
     q = request.args.get('q', '').strip()
     if not q:
         return jsonify({'results': []})
+
+    results = []
+    seen = set()
+
+    # ローカル辞書（日本語社名→ティッカー）を先に検索する。
+    # Yahoo Financeの検索APIは「任天堂」のような日本語の社名にヒットしないことが多いため。
+    q_lower = q.lower()
+    for t, name in STOCK_NAMES.items():
+        if q_lower in name.lower() or q_lower in t.lower():
+            symbol = normalize_ticker(t)
+            if symbol in seen:
+                continue
+            seen.add(symbol)
+            results.append({
+                'symbol':   symbol,
+                'name':     name,
+                'exchange': 'JPX' if symbol.endswith('.T') else '',
+            })
+            if len(results) >= 8:
+                break
+
     try:
         res = http_requests.get(
             'https://query1.finance.yahoo.com/v1/finance/search',
@@ -2210,18 +2250,22 @@ def search_ticker():
             timeout=5
         )
         quotes = res.json().get('quotes', [])
-        results = [
-            {
-                'symbol':   item.get('symbol', ''),
-                'name':     item.get('longname') or item.get('shortname') or item.get('symbol', ''),
+        for item in quotes:
+            if item.get('quoteType') not in ('EQUITY', 'ETF'):
+                continue
+            symbol = item.get('symbol', '')
+            if not symbol or symbol in seen or len(results) >= 8:
+                continue
+            seen.add(symbol)
+            results.append({
+                'symbol':   symbol,
+                'name':     item.get('longname') or item.get('shortname') or symbol,
                 'exchange': item.get('exchange', ''),
-            }
-            for item in quotes
-            if item.get('quoteType') in ('EQUITY', 'ETF')
-        ]
-        return jsonify({'results': results})
-    except Exception as e:
-        return jsonify({'results': [], 'error': str(e)})
+            })
+    except Exception:
+        pass
+
+    return jsonify({'results': results})
 
 
 @app.route('/api/stock/<ticker>')

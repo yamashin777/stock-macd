@@ -233,6 +233,18 @@ header {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: 10px; padding: 18px 20px; margin-bottom: 16px;
 }
+/* スクロールしてもチャート付近で銘柄名が確認できるよう、常に上部に固定表示するバー */
+.detail-sticky-bar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  margin: -18px -20px 14px; padding: 10px 20px;
+  border-radius: 10px 10px 0 0;
+}
+.dsb-name   { font-size: 13px; font-weight: 700; }
+.dsb-ticker { font-size: 11px; color: var(--muted); }
+.dsb-price  { font-size: 13px; font-variant-numeric: tabular-nums; margin-left: auto; }
+.dsb-badge  { flex-shrink: 0; }
 .detail-hd {
   display: flex; justify-content: space-between; align-items: flex-start;
   gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
@@ -1546,6 +1558,12 @@ function renderDetail(data) {
   const panel = document.getElementById('detail');
   panel.style.display = 'block';
   panel.innerHTML = `
+    <div class="detail-sticky-bar">
+      <span class="dsb-name">${escapeHtml(displayName)}</span>
+      <span class="dsb-ticker">${data.symbol}</span>
+      <span class="dsb-price">${s}${fmtPrice(data.current_price, data.currency)}</span>
+      <span class="badge ${cfg.cls} dsb-badge" style="font-size:10px;padding:2px 8px">${cfg.lbl}</span>
+    </div>
     <div class="detail-hd">
       <div class="detail-left">
         <div class="d-name">${escapeHtml(displayName)}<a class="ext-link" href="${detailExtUrl}" target="_blank" rel="noopener noreferrer" title="外部サイトで開く">↗</a></div>
@@ -3404,6 +3422,14 @@ function renderSignalView() {
     const sgn = d.change >= 0 ? '+' : '';
     const displayName = (d.custom_name && d.custom_name.trim()) ? d.custom_name : d.name;
     const extUrl = externalUrl(d.symbol, d.ticker);
+
+    const sinceYM = d.rsi_value >= 70 ? d.rsi_overbought_since
+      : d.rsi_value <= 30 ? d.rsi_oversold_since : null;
+    const sinceAgo = monthsAgo(sinceYM);
+    const sinceCell = sinceYM
+      ? `<span class="sig-date-${d.rsi_value >= 70 ? 'dc' : 'gc'}">${sinceYM}</span><span class="sig-months-ago">${sinceAgo === 0 ? '(今月から)' : `(${sinceAgo}ヶ月前から)`}</span>`
+      : '<span class="sig-date-none">—</span>';
+
     return `<tr onclick="switchTab('watch'); setTimeout(()=>selectCard('${d.ticker}'),100)">
       <td>
         <div class="sig-name">
@@ -3413,6 +3439,7 @@ function renderSignalView() {
         <div class="sig-ticker">${d.ticker}</div>
       </td>
       <td>${rsiStatusHtml(d.rsi_value)}</td>
+      <td>${sinceCell}</td>
       <td class="sig-price">${s}${fmtPrice(d.current_price, d.currency)}<br><span class="${cc}" style="font-size:11px">${sgn}${d.change_pct.toFixed(2)}%</span></td>
     </tr>`;
   }
@@ -3444,7 +3471,7 @@ function renderSignalView() {
     html += `<div class="sig-section">
       <div class="sig-section-title">⚡ RSI 買われすぎ・売られすぎ (${rsiAlert.length}銘柄)</div>
       <table class="sig-table">
-        <thead><tr><th>銘柄</th><th>RSI(14)</th><th>現在値</th></tr></thead>
+        <thead><tr><th>銘柄</th><th>RSI(14)</th><th>検知時期</th><th>現在値</th></tr></thead>
         <tbody>${rsiAlert.map(rsiRowHTML).join('')}</tbody>
       </table>
     </div>`;
