@@ -886,6 +886,20 @@ def calculate_macd(prices, fast=12, slow=26, signal=4):
     return macd, sig, hist
 
 
+def calculate_rsi(prices, period=14):
+    """RSI(相対力指数)。Wilderのスムージング（alpha=1/period）で算出。"""
+    delta = prices.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    rsi[(avg_loss == 0) & (avg_gain > 0)] = 100.0
+    rsi[(avg_loss == 0) & (avg_gain == 0)] = 50.0
+    return rsi
+
+
 def get_signal(macd, sig):
     valid_m = macd.dropna()
     valid_s = sig.dropna()
@@ -1048,6 +1062,7 @@ def fetch_stock_data(ticker: str) -> dict:
     close = hist['Close']
     macd, sig, hist_vals = calculate_macd(close)
     signal_text, signal_type = get_signal(macd, sig)
+    rsi = calculate_rsi(close)
 
     # 次月の推定MACD: 「株価が現在値のまま変わらなかった場合」の仮定で
     # 来月分のダミー月を1つ追加してMACDを再計算する（あくまで参考値）
@@ -1181,6 +1196,7 @@ def fetch_stock_data(ticker: str) -> dict:
             'macd':      padded(macd),
             'signal':    padded(sig),
             'histogram': padded(hist_vals),
+            'rsi':       padded(rsi),
         },
         'weekly_recent': weekly_recent,
     }
