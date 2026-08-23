@@ -233,18 +233,6 @@ header {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: 10px; padding: 18px 20px; margin-bottom: 16px;
 }
-/* スクロールしてもチャート付近で銘柄名が確認できるよう、常に上部に固定表示するバー */
-.detail-sticky-bar {
-  position: sticky; top: 0; z-index: 5;
-  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
-  background: var(--bg2); border-bottom: 1px solid var(--border);
-  margin: -18px -20px 14px; padding: 10px 20px;
-  border-radius: 10px 10px 0 0;
-}
-.dsb-name   { font-size: 13px; font-weight: 700; }
-.dsb-ticker { font-size: 11px; color: var(--muted); }
-.dsb-price  { font-size: 13px; font-variant-numeric: tabular-nums; margin-left: auto; }
-.dsb-badge  { flex-shrink: 0; }
 .detail-hd {
   display: flex; justify-content: space-between; align-items: flex-start;
   gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
@@ -284,6 +272,12 @@ header {
   border-radius: 8px; padding: 13px 15px; margin-bottom: 10px;
 }
 .chart-lbl { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 9px; }
+.chart-lbl-name {
+  display: inline-block; text-transform: none; letter-spacing: normal;
+  font-size: 11px; font-weight: 700; color: var(--text);
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 5px;
+  padding: 1px 7px; margin-right: 6px;
+}
 .chart-legend { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin:8px 0 4px; }
 .legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted);
   position:relative; cursor:help; border-bottom:1px dotted var(--muted); padding-bottom:1px; }
@@ -1558,12 +1552,6 @@ function renderDetail(data) {
   const panel = document.getElementById('detail');
   panel.style.display = 'block';
   panel.innerHTML = `
-    <div class="detail-sticky-bar">
-      <span class="dsb-name">${escapeHtml(displayName)}</span>
-      <span class="dsb-ticker">${data.symbol}</span>
-      <span class="dsb-price">${s}${fmtPrice(data.current_price, data.currency)}</span>
-      <span class="badge ${cfg.cls} dsb-badge" style="font-size:10px;padding:2px 8px">${cfg.lbl}</span>
-    </div>
     <div class="detail-hd">
       <div class="detail-left">
         <div class="d-name">${escapeHtml(displayName)}<a class="ext-link" href="${detailExtUrl}" target="_blank" rel="noopener noreferrer" title="外部サイトで開く">↗</a></div>
@@ -1658,15 +1646,15 @@ function renderDetail(data) {
     </div>
 
     <div class="chart-box">
-      <div class="chart-lbl">月足 終値チャート</div>
+      <div class="chart-lbl"><span class="chart-lbl-name">${escapeHtml(displayName)}</span> 月足 終値チャート</div>
       <div class="ch-price"><canvas id="priceChart"></canvas></div>
     </div>
     <div class="chart-box">
-      <div class="chart-lbl">${sigPeriodToggleHtml()} — 青:MACD線　橙:シグナル線　棒:ヒストグラム</div>
+      <div class="chart-lbl"><span class="chart-lbl-name">${escapeHtml(displayName)}</span> ${sigPeriodToggleHtml()} — 青:MACD線　橙:シグナル線　棒:ヒストグラム</div>
       <div class="ch-macd"><canvas id="macdChart"></canvas></div>
     </div>
     <div class="chart-box">
-      <div class="chart-lbl">RSI (14) <span style="font-size:10px;color:var(--muted);font-weight:400">買われすぎ/売られすぎの目安</span></div>
+      <div class="chart-lbl"><span class="chart-lbl-name">${escapeHtml(displayName)}</span> RSI (14) <span style="font-size:10px;color:var(--muted);font-weight:400">買われすぎ/売られすぎの目安</span></div>
       <div class="ch-rsi" id="rsi-chart-wrap"><canvas id="rsiChart"></canvas></div>
     </div>
 
