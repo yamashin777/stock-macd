@@ -1464,7 +1464,7 @@ function drawRsiChart(data) {
               color: '#fff', font: { size: 9, weight: 700 }, padding: { x: 4, y: 1 } } },
         }},
         zoom: {
-          zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
+          zoom: { wheel: { enabled: true, speed: 0.08, modifierKey: 'ctrl' }, mode: 'x',
                   onZoomComplete: ({ chart }) => syncChartZoom(chart) },
           pan:  { enabled: true, mode: 'x',
                   onPanComplete:  ({ chart }) => syncChartZoom(chart) },
@@ -1642,7 +1642,7 @@ function renderDetail(data) {
       <button class="pbtn" data-m="60" onclick="applyPeriod(60)">5年</button>
       <button class="pbtn" data-m="120" onclick="applyPeriod(120)">10年</button>
       <button class="pbtn" onclick="resetZoom()" title="ズームをリセット">↺ リセット</button>
-      <span style="margin-left:auto;font-size:10px;color:var(--muted);white-space:nowrap">ホイール: ズーム　ドラッグ: パン</span>
+      <span style="margin-left:auto;font-size:10px;color:var(--muted);white-space:nowrap">Ctrl+ホイール: ズーム　ドラッグ: パン</span>
     </div>
 
     <div class="chart-legend">
@@ -2196,7 +2196,7 @@ function drawCharts(data) {
       annotation: { annotations: Object.fromEntries(
         Object.entries(dividerAnnotation).filter(([k]) => k !== 'estimateSignal')) },
       zoom: {
-        zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
+        zoom: { wheel: { enabled: true, speed: 0.08, modifierKey: 'ctrl' }, mode: 'x',
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },
         pan:  { enabled: true, mode: 'x',
                 onPanComplete:  ({ chart }) => syncChartZoom(chart) },
@@ -2257,7 +2257,7 @@ function drawCharts(data) {
         label: ctx => ctx.dataset.label ? ` ${ctx.dataset.label}: ${Number(ctx.raw).toFixed(4)}` : null }},
       annotation: { annotations: { ...dataGapAnnotation, ...buildMacdAnnotations(mDates, mergedMacd, mergedSignal, weeklyStartIdx, estimateStartIdx, estMonthLabel), ...dividerAnnotation } },
       zoom: {
-        zoom: { wheel: { enabled: true, speed: 0.08 }, mode: 'x',
+        zoom: { wheel: { enabled: true, speed: 0.08, modifierKey: 'ctrl' }, mode: 'x',
                 onZoomComplete: ({ chart }) => syncChartZoom(chart) },
         pan:  { enabled: true, mode: 'x',
                 onPanComplete:  ({ chart }) => syncChartZoom(chart) },
