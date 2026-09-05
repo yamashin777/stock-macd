@@ -1018,10 +1018,17 @@ def fetch_stock_data(ticker: str) -> dict:
     symbol = normalize_ticker(ticker)
     stock = yf.Ticker(symbol)
 
+    # info/calendarはhistoryと独立したAPI呼び出しのため、historyの取得と並行して投げておく
+    # （直列に呼ぶとhistory→info→calendarの待ち時間がそのまま積み上がってしまうため）
+    pre_ex = ThreadPoolExecutor(max_workers=2)
+    info_future = pre_ex.submit(lambda: stock.info)
+    calendar_future = pre_ex.submit(lambda: stock.calendar)
+
     # Yahoo Finance caps monthly interval at ~7 years; fetch weekly and resample
     start_str = (datetime.now() - timedelta(days=365 * 10 + 90)).strftime('%Y-%m-%d')
     raw = stock.history(start=start_str, interval='1wk')
     if raw.empty:
+        pre_ex.shutdown(wait=False)
         raise ValueError(f'データが見つかりません: {symbol}')
 
     hist = raw.resample('MS').agg(
@@ -1039,7 +1046,7 @@ def fetch_stock_data(ticker: str) -> dict:
     sector_yf = ''
 
     try:
-        info = stock.info or {}
+        info = info_future.result() or {}
         name = info.get('longName') or info.get('shortName') or symbol
         currency = info.get('currency') or currency
         current_price = float(
@@ -1157,10 +1164,10 @@ def fetch_stock_data(ticker: str) -> dict:
     # 銘柄名: STOCK_NAMES辞書（日本語）優先、なければyfinanceの英語名
     name = STOCK_NAMES.get(disp_t) or name
 
-    # 決算日: 既存のTickerオブジェクトを再利用して取得
+    # 決算日: historyと並行して投げておいたcalendar取得の結果を利用
     next_earnings = None
     try:
-        cal = stock.calendar
+        cal = calendar_future.result()
         if cal:
             dates = cal.get('Earnings Date', [])
             if not isinstance(dates, list):
@@ -1183,6 +1190,8 @@ def fetch_stock_data(ticker: str) -> dict:
                     pass
     except Exception:
         pass
+    finally:
+        pre_ex.shutdown(wait=False)
 
     return {
         'ticker': disp_t,
@@ -1267,7 +1276,7 @@ def get_all_stocks():
             return ticker, None, str(e)
 
     data, errors = {}, {}
-    with ThreadPoolExecutor(max_workers=min(len(wl), 6)) as ex:
+    with ThreadPoolExecutor(max_workers=min(len(wl), 12)) as ex:
         for ticker, result, err in ex.map(safe_fetch, wl):
             if err:
                 errors[ticker] = err
