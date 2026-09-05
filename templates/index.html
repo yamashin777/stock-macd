@@ -2317,7 +2317,7 @@ async function removeCard(e, t) {
 async function refreshCard(t) {
   delete stockData[t];
   renderGrid();
-  const res  = await fetch(_pq('/api/stock/' + t));
+  const res  = await fetch(_pq('/api/stock/' + t + '?force=1'));
   const data = await res.json();
   stockData[t] = data;
   renderGrid();

@@ -1014,6 +1014,23 @@ def scan_stock_data(ticker: str) -> dict:
     }
 
 
+# 月足ベースの指標は数分程度古くても実用上問題ないため、Yahoo Financeへの
+# 問い合わせ結果を短時間キャッシュしてウォッチリストの再読み込みを高速化する
+_STOCK_CACHE: dict = {}
+_STOCK_CACHE_TTL = 180  # 秒
+
+
+def fetch_stock_data_cached(ticker: str, force: bool = False) -> dict:
+    key = normalize_ticker(ticker)
+    if not force:
+        cached = _STOCK_CACHE.get(key)
+        if cached and time.time() - cached[0] < _STOCK_CACHE_TTL:
+            return cached[1]
+    data = fetch_stock_data(ticker)
+    _STOCK_CACHE[key] = (time.time(), data)
+    return data
+
+
 def fetch_stock_data(ticker: str) -> dict:
     symbol = normalize_ticker(ticker)
     stock = yf.Ticker(symbol)
@@ -1271,7 +1288,7 @@ def get_all_stocks():
 
     def safe_fetch(ticker):
         try:
-            return ticker, fetch_stock_data(ticker), None
+            return ticker, fetch_stock_data_cached(ticker), None
         except Exception as e:
             return ticker, None, str(e)
 
@@ -2284,8 +2301,9 @@ def search_ticker():
 @app.route('/api/stock/<ticker>')
 def get_stock(ticker):
     profile = _req_profile()
+    force = request.args.get('force') == '1'
     try:
-        return jsonify(_sanitize_json(enrich_with_metadata(fetch_stock_data(ticker), profile)))
+        return jsonify(_sanitize_json(enrich_with_metadata(fetch_stock_data_cached(ticker, force=force), profile)))
     except ValueError as e:
         return jsonify({'error': str(e)}), 404
     except Exception as e:
