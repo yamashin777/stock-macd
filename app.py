@@ -1094,8 +1094,12 @@ def fetch_stock_data(ticker: str) -> dict:
 
         # 当月（まだ月足が確定していない月）の週足データのみ抜き出す
         # → 月足確定前の早期シグナルとして当月分だけ表示する
+        # ただし週足バーは月をまたぐことがあるため、バーの開始日ではなく
+        # 「その週が当月に食い込んでいるか（開始日+6日 >= 当月1日）」で判定する。
+        # → 月初め（当月分の週足バーがまだ1本も確定していない期間）でも、
+        #   直近の週足バーが当月分の値を反映していれば早期シグナルとして表示できる。
         current_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        mask = w_idx >= current_month_start
+        mask = (w_idx + pd.Timedelta(days=6)) >= current_month_start
         if mask.any():
             weekly_recent = {
                 'dates':     w_idx[mask].strftime('%Y-%m-%d').tolist(),
