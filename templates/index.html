@@ -1410,7 +1410,11 @@ function selectCard(t) {
   updateSidebarActive(t);
 
   const d = stockData[t];
-  if (d) { renderDetail(d); return; }
+  if (d) {
+    renderDetail(d);
+    if (!d.earnings_checked) fetchEarningsLazy(t);
+    return;
+  }
 
   fetch(_pq('/api/stock/' + t)).then(r => r.json()).then(data => {
     stockData[t] = data;
@@ -1544,6 +1548,34 @@ function setSignalPeriod(n) {
 }
 
 // ── Detail panel ───────────────────────────────────────────────────────────
+function earningsStatHtml(data) {
+  if (!data.next_earnings) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const eDate = new Date(data.next_earnings); eDate.setHours(0,0,0,0);
+  const days = Math.round((eDate - today) / 86400000);
+  if (days < 0) return '';
+  const cls = days <= 7 ? 'earn-imminent' : days <= 30 ? 'earn-soon' : days <= 60 ? 'earn-moderate' : '';
+  const label = days === 0 ? '本日' : `${days}日後`;
+  return `<div class="stat"><div class="stat-lbl">次回決算</div>
+    <div class="stat-val"><span class="${cls}">${label}</span> <span style="font-size:11px;color:var(--muted)">${escapeHtml(data.next_earnings.slice(5))}</span></div></div>`;
+}
+
+/** ウォッチリスト一覧取得時は決算日を取っていないため、詳細パネルを開いた後に軽量APIで補完する */
+function fetchEarningsLazy(t) {
+  fetch(_pq('/api/earnings/' + t)).then(r => r.json()).then(d => {
+    if (stockData[t]) {
+      stockData[t].next_earnings = d.next_earnings;
+      stockData[t].earnings_checked = true;
+    }
+    if (active === t && detailData) {
+      detailData.next_earnings = d.next_earnings;
+      detailData.earnings_checked = true;
+      const slot = document.getElementById('stat-earnings-slot');
+      if (slot) slot.innerHTML = earningsStatHtml(detailData);
+    }
+  }).catch(() => {});
+}
+
 function renderDetail(data) {
   destroyCharts();
   detailData    = data;
@@ -1589,17 +1621,7 @@ function renderDetail(data) {
         <div class="stat-val" id="stat-signal-val">${data.signal_value.toFixed(4)}</div></div>
       <div class="stat"><div class="stat-lbl">ヒストグラム</div>
         <div class="stat-val ${hc}" id="stat-histogram-val">${data.histogram_value >= 0 ? '+' : ''}${data.histogram_value.toFixed(4)}</div></div>
-      ${(() => {
-        if (!data.next_earnings) return '';
-        const today = new Date(); today.setHours(0,0,0,0);
-        const eDate = new Date(data.next_earnings); eDate.setHours(0,0,0,0);
-        const days = Math.round((eDate - today) / 86400000);
-        if (days < 0) return '';
-        const cls = days <= 7 ? 'earn-imminent' : days <= 30 ? 'earn-soon' : days <= 60 ? 'earn-moderate' : '';
-        const label = days === 0 ? '本日' : `${days}日後`;
-        return `<div class="stat"><div class="stat-lbl">次回決算</div>
-          <div class="stat-val"><span class="${cls}">${label}</span> <span style="font-size:11px;color:var(--muted)">${escapeHtml(data.next_earnings.slice(5))}</span></div></div>`;
-      })()}
+      <div id="stat-earnings-slot">${earningsStatHtml(data)}</div>
       ${(() => {
         const nmLocal = localNextMonthSignal(data);
         if (!nmLocal) return '';

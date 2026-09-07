@@ -1020,32 +1020,50 @@ _STOCK_CACHE: dict = {}
 _STOCK_CACHE_TTL = 180  # 秒
 
 
-def fetch_stock_data_cached(ticker: str, force: bool = False) -> dict:
+def fetch_stock_data_cached(ticker: str, force: bool = False, need_earnings: bool = False) -> dict:
     key = normalize_ticker(ticker)
     if not force:
         cached = _STOCK_CACHE.get(key)
         if cached and time.time() - cached[0] < _STOCK_CACHE_TTL:
-            return cached[1]
-    data = fetch_stock_data(ticker)
+            if not need_earnings or cached[1].get('earnings_checked'):
+                return cached[1]
+    data = fetch_stock_data(ticker, need_earnings=need_earnings)
     _STOCK_CACHE[key] = (time.time(), data)
     return data
 
 
-def fetch_stock_data(ticker: str) -> dict:
+def _extract_next_earnings(cal) -> str | None:
+    """yfinanceのcalendarオブジェクトから直近の決算予定日を取り出す"""
+    if not cal:
+        return None
+    dates = cal.get('Earnings Date', [])
+    if not isinstance(dates, list):
+        dates = [dates] if dates else []
+    today = datetime.now().date()
+    for d in sorted(dates):
+        try:
+            if hasattr(d, 'strftime'):
+                if d > today:
+                    return d.strftime('%Y-%m-%d')
+            else:
+                ts = pd.Timestamp(d)
+                if ts.tzinfo:
+                    ts = ts.tz_convert(None)
+                if ts.date() > today:
+                    return ts.strftime('%Y-%m-%d')
+        except Exception:
+            pass
+    return None
+
+
+def fetch_stock_data(ticker: str, need_earnings: bool = True) -> dict:
     symbol = normalize_ticker(ticker)
     stock = yf.Ticker(symbol)
-
-    # info/calendarはhistoryと独立したAPI呼び出しのため、historyの取得と並行して投げておく
-    # （直列に呼ぶとhistory→info→calendarの待ち時間がそのまま積み上がってしまうため）
-    pre_ex = ThreadPoolExecutor(max_workers=2)
-    info_future = pre_ex.submit(lambda: stock.info)
-    calendar_future = pre_ex.submit(lambda: stock.calendar)
 
     # Yahoo Finance caps monthly interval at ~7 years; fetch weekly and resample
     start_str = (datetime.now() - timedelta(days=365 * 10 + 90)).strftime('%Y-%m-%d')
     raw = stock.history(start=start_str, interval='1wk')
     if raw.empty:
-        pre_ex.shutdown(wait=False)
         raise ValueError(f'データが見つかりません: {symbol}')
 
     hist = raw.resample('MS').agg(
@@ -1063,7 +1081,7 @@ def fetch_stock_data(ticker: str) -> dict:
     sector_yf = ''
 
     try:
-        info = info_future.result() or {}
+        info = stock.info or {}
         name = info.get('longName') or info.get('shortName') or symbol
         currency = info.get('currency') or currency
         current_price = float(
@@ -1181,34 +1199,14 @@ def fetch_stock_data(ticker: str) -> dict:
     # 銘柄名: STOCK_NAMES辞書（日本語）優先、なければyfinanceの英語名
     name = STOCK_NAMES.get(disp_t) or name
 
-    # 決算日: historyと並行して投げておいたcalendar取得の結果を利用
+    # 決算日: ウォッチリスト一覧の読み込み時は使われない項目なので、
+    # 必要な時（詳細パネルを開く時など）だけ取得して通信回数を減らす
     next_earnings = None
-    try:
-        cal = calendar_future.result()
-        if cal:
-            dates = cal.get('Earnings Date', [])
-            if not isinstance(dates, list):
-                dates = [dates] if dates else []
-            today = datetime.now().date()
-            for d in sorted(dates):
-                try:
-                    if hasattr(d, 'strftime'):
-                        if d > today:
-                            next_earnings = d.strftime('%Y-%m-%d')
-                            break
-                    else:
-                        ts = pd.Timestamp(d)
-                        if ts.tzinfo:
-                            ts = ts.tz_convert(None)
-                        if ts.date() > today:
-                            next_earnings = ts.strftime('%Y-%m-%d')
-                            break
-                except Exception:
-                    pass
-    except Exception:
-        pass
-    finally:
-        pre_ex.shutdown(wait=False)
+    if need_earnings:
+        try:
+            next_earnings = _extract_next_earnings(stock.calendar)
+        except Exception:
+            pass
 
     return {
         'ticker': disp_t,
@@ -1230,6 +1228,7 @@ def fetch_stock_data(ticker: str) -> dict:
         'last_dc': last_dc,
         'sector': sector,
         'next_earnings': next_earnings,
+        'earnings_checked': need_earnings,
         'weekly_signal': weekly_signal,
         'weekly_signal_type': weekly_signal_type,
         'weekly_signal_date': weekly_signal_date,
@@ -1293,7 +1292,7 @@ def get_all_stocks():
             return ticker, None, str(e)
 
     data, errors = {}, {}
-    with ThreadPoolExecutor(max_workers=min(len(wl), 12)) as ex:
+    with ThreadPoolExecutor(max_workers=min(len(wl), 8)) as ex:
         for ticker, result, err in ex.map(safe_fetch, wl):
             if err:
                 errors[ticker] = err
@@ -2303,12 +2302,32 @@ def get_stock(ticker):
     profile = _req_profile()
     force = request.args.get('force') == '1'
     try:
-        return jsonify(_sanitize_json(enrich_with_metadata(fetch_stock_data_cached(ticker, force=force), profile)))
+        data = fetch_stock_data_cached(ticker, force=force, need_earnings=True)
+        return jsonify(_sanitize_json(enrich_with_metadata(data, profile)))
     except ValueError as e:
         return jsonify({'error': str(e)}), 404
     except Exception as e:
         return jsonify({'error': f'データ取得エラー: {e}'}), 500
 
+
+@app.route('/api/earnings/<ticker>')
+def get_earnings(ticker):
+    """決算日だけを取得する軽量エンドポイント。
+    ウォッチリスト一覧の取得では決算日を取らないため、詳細パネルを開いた際に
+    キャッシュ済みデータへ後から補完する用途で使う。"""
+    symbol = normalize_ticker(ticker)
+    next_earnings = None
+    try:
+        next_earnings = _extract_next_earnings(yf.Ticker(symbol).calendar)
+    except Exception:
+        pass
+
+    cached = _STOCK_CACHE.get(symbol)
+    if cached:
+        cached[1]['next_earnings'] = next_earnings
+        cached[1]['earnings_checked'] = True
+
+    return jsonify({'next_earnings': next_earnings})
 
 
 @app.route('/api/debug/orders-check')
