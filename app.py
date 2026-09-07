@@ -844,8 +844,9 @@ def save_orders(orders: list, profile: str = '') -> None:
         print(f'[orders] ローカル保存エラー: {e}')
 
 
-def enrich_with_metadata(result: dict, profile: str = '') -> dict:
-    entry = load_metadata(profile).get(result['ticker'], {})
+def enrich_with_metadata(result: dict, profile: str = '', metadata: dict = None) -> dict:
+    meta  = metadata if metadata is not None else load_metadata(profile)
+    entry = meta.get(result['ticker'], {})
     result['custom_name'] = entry.get('custom_name', '')
     result['memo']        = entry.get('memo', '')
     # DISC_SECTORS優先、なければfetch_stock_dataが取得したsectorを維持
@@ -1285,6 +1286,10 @@ def get_all_stocks():
     if not wl:
         return jsonify({'watchlist': [], 'data': {}, 'errors': {}})
 
+    # メタデータ(カスタム名・メモ)はプロファイル単位で1つなので、銘柄ごとに
+    # 取得し直す(Supabaseへ問い合わせるたびに通信が発生する)のではなく1回だけ読み込む
+    metadata = load_metadata(profile)
+
     def safe_fetch(ticker):
         try:
             return ticker, fetch_stock_data_cached(ticker), None
@@ -1297,7 +1302,7 @@ def get_all_stocks():
             if err:
                 errors[ticker] = err
             else:
-                data[ticker] = enrich_with_metadata(result, profile)
+                data[ticker] = enrich_with_metadata(result, profile, metadata=metadata)
 
     return jsonify(_sanitize_json({'watchlist': wl, 'data': data, 'errors': errors}))
 
