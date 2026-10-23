@@ -942,18 +942,29 @@ def scan_stock_data(ticker: str) -> dict:
     prev_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else curr_price
 
     # fast_info だけ使う（info より大幅に速い）
+    # NaN は bool(NaN)==True なので isfinite で明示チェック
     try:
         fi = stock.fast_info
-        currency   = getattr(fi, 'currency', currency) or currency
+        currency = getattr(fi, 'currency', currency) or currency
         lp = getattr(fi, 'last_price', None)
         pc = getattr(fi, 'previous_close', None)
-        if lp: curr_price = float(lp)
-        if pc: prev_close = float(pc)
+        try:
+            if lp is not None and _math.isfinite(float(lp)): curr_price = float(lp)
+        except (TypeError, ValueError):
+            pass
+        try:
+            if pc is not None and _math.isfinite(float(pc)): prev_close = float(pc)
+        except (TypeError, ValueError):
+            pass
     except Exception:
         pass
 
-    change     = curr_price - prev_close
-    change_pct = (change / prev_close * 100) if prev_close else 0.0
+    change = curr_price - prev_close
+    try:
+        change_pct = (change / prev_close * 100) if (prev_close and _math.isfinite(prev_close)) else 0.0
+        if not _math.isfinite(change_pct): change_pct = 0.0
+    except Exception:
+        change_pct = 0.0
 
     close = hist['Close']
     macd, sig, hist_s = calculate_macd(close)
@@ -1094,13 +1105,25 @@ def fetch_stock_data(ticker: str, need_earnings: bool = True) -> dict:
         try:
             fi = stock.fast_info
             currency = getattr(fi, 'currency', currency) or currency
-            current_price = float(getattr(fi, 'last_price', None) or current_price)
-            prev_close = float(getattr(fi, 'previous_close', None) or prev_close)
+            lp2 = getattr(fi, 'last_price', None)
+            pc2 = getattr(fi, 'previous_close', None)
+            try:
+                if lp2 is not None and _math.isfinite(float(lp2)): current_price = float(lp2)
+            except (TypeError, ValueError):
+                pass
+            try:
+                if pc2 is not None and _math.isfinite(float(pc2)): prev_close = float(pc2)
+            except (TypeError, ValueError):
+                pass
         except Exception:
             pass
 
     change = current_price - prev_close
-    change_pct = (change / prev_close * 100) if prev_close else 0.0
+    try:
+        change_pct = (change / prev_close * 100) if (prev_close and _math.isfinite(prev_close)) else 0.0
+        if not _math.isfinite(change_pct): change_pct = 0.0
+    except Exception:
+        change_pct = 0.0
 
     close = hist['Close']
     macd, sig, hist_vals = calculate_macd(close)
@@ -1957,14 +1980,14 @@ def discovery():
 
     if state['status'] == 'done':
         res = state.get('results') or {}
-        return jsonify({
+        return jsonify(_sanitize_json({
             'status':     'done',
             'buy':        res.get('buy',       []),
             'uptrend':    res.get('uptrend',    []),
             'recent_gc':  res.get('recent_gc',  []),
             'total':      state.get('total',     0),
             'updated_at': state.get('updated_at',0),
-        })
+        }))
     if state['status'] == 'running':
         return jsonify({
             'status':       'running',
