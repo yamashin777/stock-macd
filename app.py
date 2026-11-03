@@ -22,9 +22,8 @@ import requests as http_requests
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-app = Flask(__name__)
-
 import math as _math
+from flask.json.provider import DefaultJSONProvider
 
 def _sanitize_json(obj):
     """NaN/Inf を None に変換してJSONシリアライズ可能にする（numpy.float64対応）"""
@@ -38,6 +37,15 @@ def _sanitize_json(obj):
     except (TypeError, ValueError):
         pass
     return obj
+
+class _NaNSafeJSONProvider(DefaultJSONProvider):
+    """全エンドポイントで NaN/Inf を自動的に null に変換するプロバイダー"""
+    def dumps(self, obj, **kwargs):
+        return super().dumps(_sanitize_json(obj), **kwargs)
+
+app = Flask(__name__)
+app.json_provider_class = _NaNSafeJSONProvider
+app.json = _NaNSafeJSONProvider(app)
 
 WATCHLIST_FILE    = 'watchlist.json'
 METADATA_FILE     = 'metadata.json'
