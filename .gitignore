@@ -42,3 +42,5 @@ desktop.ini
 # Generated data (local only - use Supabase in production)
 disc_cache.json
 ai_comments.json
+
+cal_notified*.json

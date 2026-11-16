@@ -557,6 +557,15 @@ header {
 .sig-price { font-variant-numeric: tabular-nums; }
 .sig-empty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 13px; }
 .sig-months-ago { font-size: 11px; color: var(--muted); margin-left: 5px; }
+.cal-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; text-decoration: none; }
+.cal-done { color: #3fb950; background: #3fb95022; border: 1px solid #3fb95066; }
+a.cal-done[href]:hover { background: #3fb95044; }
+.cal-pending { color: var(--muted); background: rgba(255,255,255,.04); border: 1px solid var(--border); }
+.cal-error { color: #f85149; background: #f8514922; border: 1px solid #f8514966; }
+.cal-meta { font-size: 12px; color: var(--muted); margin: 0 0 8px; line-height: 1.6; }
+.cal-warn { font-size: 12px; color: #d29922; background: #d2992218; border: 1px solid #d2992255; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
+.cal-run-btn { font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--blue); cursor: pointer; text-transform: none; letter-spacing: 0; }
+.cal-run-btn:disabled { opacity: .6; cursor: default; }
 .scan-toolbar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 10px 2px; margin-bottom: 0; border-bottom: 1px solid var(--border);
@@ -3365,8 +3374,100 @@ function monthsAgo(ym) {
   return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m);
 }
 
+// ── Googleカレンダー通知状況 ───────────────────────────────────────────────
+let _calStatus = null;
+let _calLoading = false;
+
+async function loadCalStatus() {
+  if (_calLoading) return;
+  _calLoading = true;
+  try {
+    const res = await fetch(_pq('/api/calendar/status'));
+    _calStatus = await res.json();
+  } catch (e) {
+    _calStatus = { error: true, entries: {} };
+  }
+  _calLoading = false;
+  if (!document.getElementById('signal-view').classList.contains('hidden')) renderSignalView();
+}
+
+async function runCalNotify(btn) {
+  btn.disabled = true;
+  btn.textContent = 'チェック中…';
+  try {
+    const res = await fetch(_pq('/api/calendar/notify'), { method: 'POST' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (e) {
+    alert('カレンダー通知のチェックに失敗しました: ' + e.message);
+  }
+  _calStatus = null;
+  await loadCalStatus();
+}
+
+function _calKey(d) {
+  // サーバー側と同じく「当月（日本時間）」で照合する
+  const jst = new Date(Date.now() + 9 * 3600 * 1000);
+  const ym = `${jst.getUTCFullYear()}-${String(jst.getUTCMonth() + 1).padStart(2, '0')}`;
+  return `${d.ticker}|${d.signal_type}|${ym}`;
+}
+
+function _calBadge(e) {
+  if (!e) return '<span class="cal-badge cal-pending" title="次回の定期チェックで登録されます">⏳ 未通知</span>';
+  const md = (e.event_date || '').slice(5).replace('-', '/');
+  if (e.status === 'notified') {
+    const link = e.html_link ? ` href="${e.html_link}" target="_blank" rel="noopener noreferrer"` : '';
+    return `<a class="cal-badge cal-done"${link} onclick="event.stopPropagation()">✅ ${md} 登録済み</a>`;
+  }
+  if (e.status === 'error') return `<span class="cal-badge cal-error" title="${escapeHtml(e.error || '')}">⚠ 登録失敗</span>`;
+  return '<span class="cal-badge cal-pending" title="サーバーにGoogleカレンダーの設定がありません">⚙ 未設定</span>';
+}
+
+function calCellHTML(d) {
+  if (!['buy', 'sell'].includes(d.signal_type)) return '<span class="sig-date-none">—</span>';
+  if (!_calStatus) return '<span class="sig-date-none">確認中…</span>';
+  return _calBadge((_calStatus.entries || {})[_calKey(d)]);
+}
+
+function calSectionHTML() {
+  if (!_calStatus) return '';
+  const st = _calStatus;
+  const lr = st.last_run;
+  const lastRun = lr
+    ? `最終チェック: ${lr.at}（${lr.checked}銘柄を確認・新規点灯 ${lr.new}件）`
+    : 'まだ一度もチェックしていません';
+  const warn = st.configured ? '' :
+    '<div class="cal-warn">⚙ サーバーにGoogleカレンダーの設定（GOOGLE_SERVICE_ACCOUNT_JSON / GOOGLE_CALENDAR_ID）がないため、点灯の記録のみ行っています。</div>';
+  const entries = Object.values(st.entries || {})
+    .sort((a, b) => (b.detected_at || '').localeCompare(a.detected_at || ''))
+    .slice(0, 15);
+  const rows = entries.map(e => {
+    const cfg = e.signal_type === 'buy'
+      ? '<span class="sig-date-gc">月足GC（買い）</span>'
+      : '<span class="sig-date-dc">月足DC（売り）</span>';
+    return `<tr onclick="switchTab('watch'); setTimeout(()=>selectCard('${e.ticker}'),100)">
+      <td>${e.detected_at || ''}</td>
+      <td><div class="sig-name">${escapeHtml(e.name || e.ticker)}</div><div class="sig-ticker">${e.ticker}</div></td>
+      <td>${cfg}<div class="sig-ticker">${e.month || ''}</div></td>
+      <td>${_calBadge(e)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="sig-section">
+    <div class="sig-section-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span>📅 Googleカレンダー通知</span>
+      <button class="cal-run-btn" onclick="runCalNotify(this)">今すぐチェック</button>
+    </div>
+    <div class="cal-meta">${lastRun}。毎朝7:30に自動チェックし、新しく点灯した月足GC・DCを翌日の予定として登録します（同じ銘柄・同じ月のシグナルは1回だけ）。</div>
+    ${warn}
+    ${rows ? `<table class="sig-table">
+      <thead><tr><th>検知日時</th><th>銘柄</th><th>シグナル</th><th>カレンダー</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>` : '<div class="sig-date-none" style="padding:6px 10px">通知履歴はまだありません</div>'}
+  </div>`;
+}
+
 function renderSignalView() {
   const el = document.getElementById('signal-content');
+  if (!_calStatus) loadCalStatus();
   const items = Object.values(stockData);
   if (!items.length) {
     el.innerHTML = '<div class="sig-empty">データを読み込み中です。ウォッチリストタブで更新してください。</div>';
@@ -3432,6 +3533,7 @@ function renderSignalView() {
       <td>${gcCell}</td>
       <td>${dcCell}</td>
       <td>${earlyCell}</td>
+      <td>${calCellHTML(d)}</td>
     </tr>`;
   }
 
@@ -3471,7 +3573,7 @@ function renderSignalView() {
     return aOB ? b.rsi_value - a.rsi_value : a.rsi_value - b.rsi_value;
   });
 
-  let html = '';
+  let html = calSectionHTML();
 
   if (recentGC.length) {
     html += `<div class="sig-section">
@@ -3479,7 +3581,7 @@ function renderSignalView() {
       <table class="sig-table">
         <thead><tr>
           <th>銘柄</th><th>現在シグナル</th><th>現在値</th>
-          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th>
+          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th><th>📅通知</th>
         </tr></thead>
         <tbody>${recentGC.map(rowHTML).join('')}</tbody>
       </table>
@@ -3502,7 +3604,7 @@ function renderSignalView() {
       <table class="sig-table">
         <thead><tr>
           <th>銘柄</th><th>現在シグナル</th><th>現在値</th>
-          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th>
+          <th>最終GC（買い）</th><th>最終DC（売り）</th><th>⚡早期シグナル（週足）</th><th>📅通知</th>
         </tr></thead>
         <tbody>${others.map(rowHTML).join('')}</tbody>
       </table>

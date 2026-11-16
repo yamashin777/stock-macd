@@ -19,7 +19,7 @@ except Exception:
         pass
 import threading
 import requests as http_requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import math as _math
@@ -1281,6 +1281,175 @@ def fetch_stock_data(ticker: str, need_earnings: bool = True) -> dict:
         },
         'weekly_recent': weekly_recent,
     }
+
+
+# ── Googleカレンダー通知 ─────────────────────────────────────────────────────
+# 月足MACDの買い(GC)・売り(DC)シグナルが新たに点灯したら、翌日の終日予定として
+# Googleカレンダーに登録する。同じ「銘柄×シグナル×月」は1回だけ登録する。
+# 必要な環境変数:
+#   GOOGLE_SERVICE_ACCOUNT_JSON … サービスアカウントの鍵JSON（中身をそのまま）
+#   GOOGLE_CALENDAR_ID          … 登録先カレンダーID（Gmailアドレス等）
+GCAL_SA_JSON     = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
+GCAL_CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID', '')
+CAL_NOTIFY_FILE  = 'cal_notified.json'
+_JST             = timezone(timedelta(hours=9))
+_CAL_KEEP_DAYS   = 400
+_cal_lock        = threading.Lock()
+_gcal_token      = {'token': None, 'exp': 0.0}
+
+
+def _gcal_configured() -> bool:
+    return bool(GCAL_SA_JSON and GCAL_CALENDAR_ID)
+
+
+def _gcal_access_token() -> str:
+    if _gcal_token['token'] and time.time() < _gcal_token['exp']:
+        return _gcal_token['token']
+    from google.oauth2 import service_account
+    from google.auth.transport.requests import Request
+    creds = service_account.Credentials.from_service_account_info(
+        json.loads(GCAL_SA_JSON),
+        scopes=['https://www.googleapis.com/auth/calendar.events'],
+    )
+    creds.refresh(Request())
+    _gcal_token['token'] = creds.token
+    _gcal_token['exp']   = time.time() + 50 * 60  # 有効期限1時間より少し前に更新
+    return creds.token
+
+
+def _gcal_create_event(summary: str, description: str, date_str: str) -> dict:
+    """終日予定を作成して {'id', 'htmlLink'} を返す"""
+    from urllib.parse import quote
+    end = (datetime.strptime(date_str, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
+    res = http_requests.post(
+        f'https://www.googleapis.com/calendar/v3/calendars/{quote(GCAL_CALENDAR_ID, safe="")}/events',
+        headers={'Authorization': f'Bearer {_gcal_access_token()}'},
+        json={
+            'summary': summary,
+            'description': description,
+            'start': {'date': date_str},
+            'end':   {'date': end},
+        },
+        timeout=15,
+    )
+    if res.status_code not in (200, 201):
+        raise RuntimeError(f'Calendar API HTTP {res.status_code}: {res.text[:200]}')
+    ev = res.json()
+    return {'id': ev.get('id'), 'htmlLink': ev.get('htmlLink')}
+
+
+def _load_cal_log(profile: str = '') -> dict:
+    data = None
+    if SUPABASE_URL and SUPABASE_KEY:
+        data = _sb_load(_pkey('cal_notified', profile))
+    if not isinstance(data, dict):
+        try:
+            with open(_pfile(CAL_NOTIFY_FILE, profile), encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+    if not isinstance(data, dict):
+        data = {}
+    data.setdefault('entries', {})
+    data.setdefault('last_run', None)
+    return data
+
+
+def _save_cal_log(log: dict, profile: str = '') -> None:
+    if SUPABASE_URL and SUPABASE_KEY:
+        _sb_save(_pkey('cal_notified', profile), log)
+    try:
+        with open(_pfile(CAL_NOTIFY_FILE, profile), 'w', encoding='utf-8') as f:
+            json.dump(log, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f'[cal_notify] ローカル保存エラー: {e}')
+
+
+def run_calendar_notify(profile: str = '') -> dict:
+    """ウォッチリストを確認し、新しく点灯した月足シグナルを翌日の予定として登録する"""
+    with _cal_lock:
+        log      = _load_cal_log(profile)
+        entries  = log['entries']
+        wl       = load_watchlist(profile)
+        metadata = load_metadata(profile)
+        now      = datetime.now(_JST)
+        event_date = (now + timedelta(days=1)).strftime('%Y-%m-%d')
+        configured = _gcal_configured()
+
+        def safe_fetch(t):
+            try:
+                return t, fetch_stock_data_cached(t), None
+            except Exception as e:
+                return t, None, str(e)
+
+        fetched = []
+        if wl:
+            with ThreadPoolExecutor(max_workers=min(len(wl), 8)) as ex:
+                fetched = list(ex.map(safe_fetch, wl))
+
+        new_items, errors = [], []
+        for t, d, err in fetched:
+            if err or not d:
+                errors.append(f'{t}: {err}')
+                continue
+            st = d.get('signal_type')
+            if st not in ('buy', 'sell'):
+                continue
+            # get_signal は最新の月足（＝当月の未確定足）で判定するため当月で記録する。
+            # ※chart.dates は日本株でタイムゾーン変換により1ヶ月前にずれることがあるので使わない
+            month = now.strftime('%Y-%m')
+            key = f"{d['ticker']}|{st}|{month}"
+            if entries.get(key, {}).get('status') == 'notified':
+                continue  # 登録済み
+
+            meta_e = metadata.get(d['ticker'], {}) if isinstance(metadata, dict) else {}
+            name = (meta_e.get('custom_name') or '').strip() or d.get('name') or d['ticker']
+            label = '月足GC（買い）' if st == 'buy' else '月足DC（売り）'
+            entry = {
+                'ticker': d['ticker'], 'name': name, 'signal_type': st,
+                'signal': d.get('signal'), 'month': month,
+                'price': d.get('current_price'), 'currency': d.get('currency'),
+                'detected_at': now.strftime('%Y-%m-%d %H:%M'),
+                'event_date': event_date,
+            }
+            if configured:
+                try:
+                    sym_ = '¥' if d.get('currency') == 'JPY' else '$'
+                    ev = _gcal_create_event(
+                        summary=f'【{label}】{name} ({d["ticker"]})',
+                        description=(
+                            f'{month} の月足MACDで{label}が点灯しました。\n'
+                            f'検知時点の株価: {sym_}{d.get("current_price"):,.2f}\n'
+                            f'※月足は月末まで確定しないため、月中のシグナルは消える場合があります。\n'
+                            f'https://stock-macd.onrender.com/#signal'
+                        ),
+                        date_str=event_date,
+                    )
+                    entry.update(status='notified', event_id=ev['id'], html_link=ev['htmlLink'],
+                                 notified_at=now.strftime('%Y-%m-%d %H:%M'))
+                except Exception as e:
+                    entry.update(status='error', error=str(e)[:300])
+                    errors.append(f'{d["ticker"]}: {e}')
+            else:
+                entry['status'] = 'not_configured'
+            entries[key] = entry
+            new_items.append(entry)
+
+        # 古い記録を削除
+        cutoff = (now - timedelta(days=_CAL_KEEP_DAYS)).strftime('%Y-%m-%d')
+        for k in [k for k, v in entries.items() if (v.get('detected_at') or '') < cutoff]:
+            del entries[k]
+
+        log['last_run'] = {
+            'at': now.strftime('%Y-%m-%d %H:%M'),
+            'checked': len(wl),
+            'new': len(new_items),
+            'notified': sum(1 for e in new_items if e.get('status') == 'notified'),
+            'errors': errors[:20],
+            'configured': configured,
+        }
+        _save_cal_log(log, profile)
+        return {'last_run': log['last_run'], 'new': new_items}
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -2603,6 +2772,24 @@ def delete_order(order_id):
     orders  = [o for o in load_orders(profile) if o.get('id') != order_id]
     save_orders(orders, profile)
     return jsonify({'success': True, 'orders': orders})
+
+
+@app.route('/api/calendar/notify', methods=['GET', 'POST'])
+def calendar_notify():
+    """新しく点灯した月足シグナルをGoogleカレンダーへ登録（定期実行・手動実行用）。
+    同じ銘柄×シグナル×月は1回しか登録しないため、何度呼んでも重複しない。"""
+    result = run_calendar_notify(_req_profile())
+    return jsonify(_sanitize_json(result))
+
+
+@app.route('/api/calendar/status', methods=['GET'])
+def calendar_status():
+    log = _load_cal_log(_req_profile())
+    return jsonify(_sanitize_json({
+        'configured': _gcal_configured(),
+        'last_run':   log.get('last_run'),
+        'entries':    log.get('entries', {}),
+    }))
 
 
 if __name__ == '__main__':

@@ -1,0 +1,20 @@
+name: 月足シグナルのカレンダー通知
+
+on:
+  schedule:
+    # 毎日 7:30 JST（= 22:30 UTC）
+    - cron: '30 22 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 起動待ち（Renderの無料プランはスリープから復帰に時間がかかる）
+        run: |
+          curl -sS --retry 6 --retry-delay 20 --retry-all-errors --max-time 120 \
+            -o /dev/null https://stock-macd.onrender.com/api/calendar/status
+      - name: シグナルを確認してカレンダーに登録
+        run: |
+          curl -fsS --retry 3 --retry-delay 30 --retry-all-errors --max-time 600 \
+            -X POST https://stock-macd.onrender.com/api/calendar/notify
