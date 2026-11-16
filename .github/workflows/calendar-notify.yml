@@ -2,8 +2,8 @@ name: 月足シグナルのカレンダー通知
 
 on:
   schedule:
-    # 毎日 7:30 JST（= 22:30 UTC）
-    - cron: '30 22 * * *'
+    # 毎日 6:30 JST（= 21:30 UTC）
+    - cron: '30 21 * * *'
   workflow_dispatch: {}
 
 jobs:
