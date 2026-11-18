@@ -1404,7 +1404,7 @@ def run_calendar_notify(profile: str = '') -> dict:
             if st not in ('buy', 'sell'):
                 continue
             # get_signal は最新の月足（＝当月の未確定足）で判定するため当月で記録する。
-            # ※chart.dates は日本株でタイムゾーン変換により1ヶ月前にずれることがあるので使わない
+            # (chart.dates の末尾も当月だが、取得時刻と月の境目のずれを避けるため現在時刻で決める)
             month = now.strftime('%Y-%m')
             key = f"{d['ticker']}|{st}|{month}"
             if entries.get(key, {}).get('status') == 'notified':
