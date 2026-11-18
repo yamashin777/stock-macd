@@ -880,10 +880,14 @@ def display_ticker(symbol: str) -> str:
 
 
 def strip_tz(index):
-    try:
-        return index.tz_convert(None)
-    except TypeError:
+    """取引所の現地時間のまま tz 情報だけ外す。
+
+    tz_convert(None) だと UTC に変換されるため、日本株(Asia/Tokyo)の
+    月初 00:00 が前月末 15:00 になり、月足ラベルが1ヶ月前にずれてしまう。
+    """
+    if getattr(index, 'tz', None) is None:
         return index
+    return index.tz_localize(None)
 
 
 def calculate_macd(prices, fast=12, slow=26, signal=4):
@@ -938,6 +942,8 @@ def scan_stock_data(ticker: str) -> dict:
     raw = stock.history(start=start_str, interval='1wk')
     if raw.empty:
         raise ValueError(f'データが見つかりません: {symbol}')
+    # 現地時間のまま tz を外してから月足に集計する（日本株の月ラベルずれ防止）
+    raw.index = strip_tz(raw.index)
 
     hist = raw.resample('MS').agg(
         Close=('Close', 'last'),
@@ -1085,6 +1091,8 @@ def fetch_stock_data(ticker: str, need_earnings: bool = True) -> dict:
     raw = stock.history(start=start_str, interval='1wk')
     if raw.empty:
         raise ValueError(f'データが見つかりません: {symbol}')
+    # 現地時間のまま tz を外してから月足に集計する（日本株の月ラベルずれ防止）
+    raw.index = strip_tz(raw.index)
 
     hist = raw.resample('MS').agg(
         Open=('Open', 'first'),
@@ -1396,7 +1404,7 @@ def run_calendar_notify(profile: str = '') -> dict:
             if st not in ('buy', 'sell'):
                 continue
             # get_signal は最新の月足（＝当月の未確定足）で判定するため当月で記録する。
-            # ※chart.dates は日本株でタイムゾーン変換により1ヶ月前にずれることがあるので使わない
+            # (chart.dates の末尾も当月だが、取得時刻と月の境目のずれを避けるため現在時刻で決める)
             month = now.strftime('%Y-%m')
             key = f"{d['ticker']}|{st}|{month}"
             if entries.get(key, {}).get('status') == 'notified':
